@@ -59,7 +59,7 @@ export default {
 
     // ── POST /api/sticker/earn ───────────────────────────────
     if (method === 'POST' && path === '/api/sticker/earn') {
-      const body = await request.json();
+      const body = await request.json().catch(() => ({}));
       const { sessionId, gameType } = body;
       if (!sessionId || !gameType) return error('Missing sessionId or gameType');
 

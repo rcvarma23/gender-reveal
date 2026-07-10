@@ -28,9 +28,29 @@ TOTAL_VOUCHERS   = "10"
 LETTERS_NEEDED   = "7"
 
 # ── ROUTES ─────────────────────────────────────────────────────
-# Note: multi-worker routing requires services configuration
-# For now, these route definitions are for reference during deployment
-# Dev server will use the main worker (party-state.js)
+[[routes]]
+pattern = "*/api/party-state"
+script  = "workers/party-state.js"
+
+[[routes]]
+pattern = "*/api/session/*"
+script  = "workers/session-manager.js"
+
+[[routes]]
+pattern = "*/api/voucher/*"
+script  = "workers/voucher-engine.js"
+
+[[routes]]
+pattern = "*/api/sticker/*"
+script  = "workers/sticker-system.js"
+
+[[routes]]
+pattern = "*/api/admin/*"
+script  = "workers/admin-controls.js"
+
+[[routes]]
+pattern = "*/api/couple/*"
+script  = "workers/couple-game.js"
 
 # ── DEPLOY COMMAND ──────────────────────────────────────────────
 # npx wrangler deploy
