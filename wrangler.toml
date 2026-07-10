@@ -1,0 +1,62 @@
+name = "gender-reveal"
+main = "workers/party-state.js"
+compatibility_date = "2024-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+# ── PAGES ──────────────────────────────────────────────────────
+[site]
+bucket = "./public"
+
+# ── KV NAMESPACES ──────────────────────────────────────────────
+[[kv_namespaces]]
+binding = "GR_KV"
+id      = "YOUR_KV_ID_HERE"         # replace after: wrangler kv:namespace create "GR_KV"
+preview_id = "YOUR_PREVIEW_KV_ID"   # replace after: wrangler kv:namespace create "GR_KV" --preview
+
+# ── R2 BUCKET (video storage) ───────────────────────────────────
+[[r2_buckets]]
+binding = "GR_R2"
+bucket_name = "gender-reveal-video"  # create via: wrangler r2 bucket create gender-reveal-video
+
+# ── ENVIRONMENT VARIABLES ──────────────────────────────────────
+# DO NOT put secrets here — use: wrangler secret put ADMIN_PIN_HASH
+[vars]
+ENVIRONMENT      = "production"
+PARTY_NAME       = "Baby Reveal Party"
+PARTY_LOCATION   = "Atlanta, GA"
+TOTAL_VOUCHERS   = "10"
+LETTERS_NEEDED   = "7"
+
+# ── ROUTES ─────────────────────────────────────────────────────
+[[routes]]
+pattern = "*/api/party-state"
+script  = "workers/party-state.js"
+
+[[routes]]
+pattern = "*/api/session/*"
+script  = "workers/session-manager.js"
+
+[[routes]]
+pattern = "*/api/voucher/*"
+script  = "workers/voucher-engine.js"
+
+[[routes]]
+pattern = "*/api/sticker/*"
+script  = "workers/sticker-system.js"
+
+[[routes]]
+pattern = "*/api/admin/*"
+script  = "workers/admin-controls.js"
+
+[[routes]]
+pattern = "*/api/couple/*"
+script  = "workers/couple-game.js"
+
+# ── DEPLOY COMMAND ──────────────────────────────────────────────
+# npx wrangler deploy
+# npx wrangler dev   ← local development with live KV
+
+# ── SECRETS TO SET BEFORE PARTY ────────────────────────────────
+# npx wrangler secret put ADMIN_PIN_HASH
+# npx wrangler secret put COUPLE_PIN_HASH
+# npx wrangler secret put SECRET_CODE     ← the 10 letters

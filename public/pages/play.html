@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0D0B1E">
+  <title>Choose Your Game 🎮</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&family=Fredoka+One&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/animations.css">
+  <link rel="stylesheet" href="../css/layout.css">
+  <link rel="stylesheet" href="../css/components.css">
+
+  <style>
+    body { background: var(--navy-deepest); overflow-x: hidden; }
+
+    /* Ambient orb */
+    .bg-orb {
+      position: fixed; border-radius: 50%; filter: blur(80px);
+      pointer-events: none; z-index: 0;
+    }
+    .orb-1 { width:350px;height:350px;top:-100px;right:-80px;
+              background:radial-gradient(circle,rgba(201,168,76,.09) 0%,transparent 70%);
+              animation: floatSlow 9s ease-in-out infinite; }
+    .orb-2 { width:280px;height:280px;bottom:-80px;left:-60px;
+              background:radial-gradient(circle,rgba(100,60,200,.07) 0%,transparent 70%);
+              animation: floatSlow 12s ease-in-out infinite reverse; }
+
+    .page-inner {
+      position: relative; z-index: 2;
+      min-height: 100dvh;
+      display: flex; flex-direction: column;
+      align-items: center; padding: 2rem 1.25rem 6rem;
+    }
+
+    /* Header row */
+    .header-row {
+      display: flex; align-items: center; justify-content: space-between;
+      width: 100%; max-width: 420px; margin-bottom: 1.75rem;
+    }
+
+    .back-btn {
+      display: flex; align-items: center; gap: .4rem;
+      background: transparent; border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-full); padding: .45rem 1rem;
+      color: var(--text-muted); font-size: .8rem; cursor: pointer;
+      transition: all var(--transition-base); font-family: var(--font-body);
+    }
+    .back-btn:hover { border-color: var(--border-gold); color: var(--gold-soft); }
+
+    /* Hero */
+    .hero { text-align: center; margin-bottom: 2rem; }
+    .hero h1 {
+      font-family: var(--font-display); font-weight: 900;
+      font-size: clamp(1.8rem, 6vw, 2.5rem); line-height: 1.15;
+      margin-bottom: .75rem;
+    }
+    .hero p { color: var(--text-secondary); font-size: .95rem; }
+
+    /* Age cards grid */
+    .age-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .875rem;
+      width: 100%; max-width: 420px;
+      margin-bottom: 1.5rem;
+    }
+
+    .age-card-item {
+      background: var(--navy-surface);
+      border: 1.5px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 1.375rem 1rem 1.25rem;
+      cursor: pointer; text-align: center;
+      transition: all var(--transition-slow);
+      -webkit-tap-highlight-color: transparent;
+      user-select: none; position: relative; overflow: hidden;
+    }
+
+    .age-card-item::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(201,168,76,.05) 0%, transparent 60%);
+      border-radius: inherit; pointer-events: none; opacity: 0;
+      transition: opacity var(--transition-base);
+    }
+
+    .age-card-item:hover, .age-card-item:focus {
+      border-color: var(--border-gold);
+      background: var(--navy-card);
+      transform: translateY(-3px);
+      box-shadow: var(--glow-gold-sm);
+      outline: none;
+    }
+    .age-card-item:hover::before { opacity: 1; }
+    .age-card-item:active { transform: scale(.96) translateY(0); }
+
+    .age-card-item .card-emoji {
+      font-size: 2.5rem; line-height: 1;
+      margin-bottom: .625rem; display: block;
+    }
+    .age-card-item .card-name {
+      font-size: .9rem; font-weight: 600;
+      color: var(--gold-soft); display: block;
+    }
+    .age-card-item .card-range {
+      font-size: .68rem; color: var(--text-muted);
+      margin-top: .2rem; display: block;
+    }
+    .age-card-item .card-perks {
+      font-size: .65rem; color: var(--text-secondary);
+      margin-top: .625rem; padding-top: .5rem;
+      border-top: 1px solid var(--border-subtle);
+      line-height: 1.8; display: block;
+    }
+
+    /* Kid-first notice */
+    .kid-first-notice {
+      display: flex; align-items: flex-start; gap: .625rem;
+      padding: .875rem 1rem;
+      background: rgba(201,168,76,.06);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      width: 100%; max-width: 420px;
+      font-size: .78rem; color: var(--text-secondary);
+      line-height: 1.5;
+    }
+    .kid-first-notice .notice-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: .05rem; }
+
+    /* Resume banner — appears if prior session detected */
+    .resume-banner {
+      width: 100%; max-width: 420px;
+      background: var(--navy-card);
+      border: 1px solid var(--border-gold);
+      border-radius: var(--radius-lg);
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.5rem;
+      display: none;
+    }
+    .resume-banner.visible { display: block; animation: slideDown .4s var(--transition-spring); }
+    .resume-banner h4 {
+      font-family: var(--font-display); font-size: 1rem;
+      color: var(--gold-soft); margin-bottom: .5rem;
+    }
+
+    /* Session chips — all players on this phone */
+    .session-list { display: flex; flex-direction: column; gap: .4rem; }
+    .session-chip {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .5rem .75rem;
+      background: var(--navy-mid); border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+      cursor: pointer; transition: all var(--transition-base);
+    }
+    .session-chip:hover { border-color: var(--border-gold); }
+    .session-chip .chip-left { display: flex; align-items: center; gap: .5rem; font-size: .85rem; }
+    .session-chip .chip-tag  { font-size: .65rem; }
+  </style>
+</head>
+<body>
+  <div class="bg-orb orb-1"></div>
+  <div class="bg-orb orb-2"></div>
+
+  <main class="page-inner">
+
+    <!-- Header -->
+    <div class="header-row anim-fade-in">
+      <button class="back-btn" onclick="history.back()" aria-label="Go back">
+        ← Back
+      </button>
+      <div class="badge badge-gold">🎀 Baby Reveal</div>
+    </div>
+
+    <!-- Resume Banner (shows if sessions exist) -->
+    <div class="resume-banner" id="resumeBanner" role="region" aria-label="Previous sessions">
+      <h4>👋 Welcome back!</h4>
+      <div class="session-list" id="sessionList"></div>
+      <div class="divider"><span>or start a new game</span></div>
+    </div>
+
+    <!-- Hero -->
+    <div class="hero anim-slide-up">
+      <h1 class="anim-shimmer">Who's Playing?</h1>
+      <p>Each age group has their own special game!<br>
+         <strong style="color:var(--gold-soft)">Kids go first 🍼</strong></p>
+    </div>
+
+    <!-- Age Group Cards -->
+    <div class="age-grid" role="list" aria-label="Age groups">
+
+      <div class="age-card-item anim-slide-up"
+           role="listitem" tabindex="0"
+           data-age="toddler"
+           onclick="selectAge('toddler')"
+           onkeydown="if(event.key==='Enter')selectAge('toddler')"
+           aria-label="Little One, ages 0 to 5">
+        <span class="card-emoji" aria-hidden="true">🍼</span>
+        <span class="card-name">Little One</span>
+        <span class="card-range">Ages 0 – 5</span>
+        <span class="card-perks">
+          🎈 Pop balloons<br>
+          🍌 Feed the baby<br>
+          ⭐ Earn stickers<br>
+          ♾️ Play as much as you want!
+        </span>
+      </div>
+
+      <div class="age-card-item anim-slide-up anim-delay-1"
+           role="listitem" tabindex="0"
+           data-age="kid"
+           onclick="selectAge('kid')"
+           onkeydown="if(event.key==='Enter')selectAge('kid')"
+           aria-label="Kid, ages 5 to 10">
+        <span class="card-emoji" aria-hidden="true">🎈</span>
+        <span class="card-name">Kid</span>
+        <span class="card-range">Ages 5 – 10</span>
+        <span class="card-perks">
+          🃏 Match the emojis<br>
+          🔤 Unscramble words<br>
+          🦄 Rare sticker drops<br>
+          ♾️ Keep replaying!
+        </span>
+      </div>
+
+      <div class="age-card-item anim-slide-up anim-delay-2"
+           role="listitem" tabindex="0"
+           data-age="teen"
+           onclick="selectAge('teen')"
+           onkeydown="if(event.key==='Enter')selectAge('teen')"
+           aria-label="Teen, ages 10 to 18">
+        <span class="card-emoji" aria-hidden="true">🎮</span>
+        <span class="card-name">Teen</span>
+        <span class="card-range">Ages 10 – 18</span>
+        <span class="card-perks">
+          🧩 Baby trivia<br>
+          ⏱️ Race the clock<br>
+          🎟️ Win a secret letter<br>
+          🏆 Beat your friends!
+        </span>
+      </div>
+
+      <div class="age-card-item anim-slide-up anim-delay-3"
+           role="listitem" tabindex="0"
+           data-age="adult"
+           onclick="selectAge('adult')"
+           onkeydown="if(event.key==='Enter')selectAge('adult')"
+           aria-label="Adult, ages 20 plus">
+        <span class="card-emoji" aria-hidden="true">🎉</span>
+        <span class="card-name">Adult</span>
+        <span class="card-range">Ages 20+</span>
+        <span class="card-perks">
+          🔮 Baby predictions<br>
+          💡 How much do you know?<br>
+          🎟️ Win a secret letter<br>
+          🔑 Kid plays first on shared phones
+        </span>
+      </div>
+
+    </div>
+
+    <!-- Kid-first notice -->
+    <div class="kid-first-notice anim-fade-in" id="kidFirstNotice">
+      <span class="notice-icon">💡</span>
+      <span>
+        <strong style="color:var(--gold-soft)">Sharing this phone?</strong>
+        Let a little one play first — it unlocks adult voucher eligibility!
+      </span>
+    </div>
+
+  </main>
+
+  <!-- Cooldown modal -->
+  <div class="modal-overlay hidden" id="cooldownModal" role="dialog" aria-modal="true" aria-labelledby="cooldown-title">
+    <div class="modal">
+      <div style="font-size:2.5rem;margin-bottom:1rem">⏳</div>
+      <h3 id="cooldown-title" style="font-family:var(--font-display);margin-bottom:.75rem">Hold on a moment!</h3>
+      <p style="color:var(--text-secondary);font-size:.9rem;margin-bottom:1.25rem">
+        This phone was just used — give others a chance first!<br>
+        New player can start in:
+      </p>
+      <div class="cooldown-timer" id="cooldownDisplay" aria-live="polite">2:00</div>
+      <p style="font-size:.75rem;color:var(--text-muted);margin-top:.75rem">Or pass the phone to someone who hasn't played yet</p>
+      <button class="btn btn-secondary btn--full" style="margin-top:1.25rem"
+              onclick="document.getElementById('cooldownModal').classList.add('hidden')">
+        Got it 👍
+      </button>
+    </div>
+  </div>
+
+  <!-- Toast container -->
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <script type="module">
+    import DeviceManager  from '../js/core/device.js';
+    import SessionManager from '../js/core/session.js';
+    import PartyState     from '../js/core/state.js';
+    import API            from '../js/core/api.js';
+
+    // ─── INIT ─────────────────────────────────────────────────
+
+    const init = async () => {
+      // Redirect if party not active
+      const cached = PartyState.restoreFromCache();
+      if (cached === 'waiting')  { window.location.href = 'index.html'; return; }
+      if (cached === 'revealed') { window.location.href = 'reveal.html'; return; }
+
+      // Start polling for state changes
+      PartyState.startPolling((state) => {
+        if (state === 'waiting')  window.location.href = 'index.html';
+        if (state === 'revealed') window.location.href = 'reveal.html';
+        if (state === 'finale')   {
+          // Only couple game visible — hide age selector
+          document.querySelector('.age-grid').style.display = 'none';
+          showToast('Games are now closed! Watch the couple reveal! 🎀');
+        }
+      });
+
+      // Check for existing sessions on this device
+      loadExistingSessions();
+
+      // Update kid-first notice
+      updateKidFirstNotice();
+    };
+
+    // ─── EXISTING SESSIONS ────────────────────────────────────
+
+    const loadExistingSessions = () => {
+      const sessions = SessionManager.getAllDeviceSessions();
+      if (!sessions.length) return;
+
+      const banner = document.getElementById('resumeBanner');
+      const list   = document.getElementById('sessionList');
+
+      const activeSessions = sessions.filter(s =>
+        !SessionManager.isSessionExpired(s)
+      );
+
+      if (!activeSessions.length) return;
+
+      list.innerHTML = activeSessions.map(s => {
+        const ageLabel = { toddler:'👶 Little One', kid:'👧 Kid', teen:'🎮 Teen', adult:'👩 Adult' }[s.ageGroup] || s.ageGroup;
+        const statusTag = s.letterRevealed
+          ? `<span class="badge badge-gold chip-tag">🎟️ Letter revealed</span>`
+          : s.status === 'completed'
+          ? `<span class="badge badge-success chip-tag">✅ Done</span>`
+          : `<span class="badge badge-warning chip-tag">⏳ In progress</span>`;
+
+        return `
+          <div class="session-chip" onclick="resumeSession('${s.sessionId}')" tabindex="0">
+            <div class="chip-left">
+              <span>${ageLabel}</span>
+              ${statusTag}
+            </div>
+            <span style="font-size:.75rem;color:var(--gold-soft)">Resume →</span>
+          </div>
+        `;
+      }).join('');
+
+      banner.classList.add('visible');
+    };
+
+    // ─── KID-FIRST NOTICE ─────────────────────────────────────
+
+    const updateKidFirstNotice = () => {
+      const kidPlayed = SessionManager.kidPlayedOnDevice();
+      const notice    = document.getElementById('kidFirstNotice');
+      if (kidPlayed) {
+        notice.innerHTML = `
+          <span class="notice-icon">✅</span>
+          <span><strong style="color:var(--success)">Kid played first!</strong>
+          Adult voucher eligibility is now unlocked on this phone 🎟️</span>
+        `;
+        notice.style.borderColor = 'rgba(102,187,106,0.3)';
+        notice.style.background  = 'rgba(102,187,106,0.06)';
+      }
+    };
+
+    // ─── AGE SELECTION ────────────────────────────────────────
+
+    window.selectAge = async (ageGroup) => {
+      // Check cooldown for adults/teens
+      const cooldownMs = SessionManager.getCooldownRemaining(ageGroup);
+      if (cooldownMs > 0) {
+        showCooldown(cooldownMs);
+        return;
+      }
+
+      // Check adult requires kid first
+      if (['adult', 'teen'].includes(ageGroup)) {
+        const kidPlayed = SessionManager.kidPlayedOnDevice();
+        // Note: adults CAN play without kid first — they just won't be
+        // eligible for vouchers. The server enforces this.
+        // We only block if device already used 1 voucher AND no kid
+        const deviceData = DeviceManager.getLocalDeviceData();
+        if (deviceData.vouchersIssued >= 1 && !kidPlayed) {
+          showToast('Let a little one play first on this phone! 🍼');
+          return;
+        }
+      }
+
+      // Animate card selection
+      const card = document.querySelector(`[data-age="${ageGroup}"]`);
+      if (card) {
+        card.style.transform = 'scale(0.94)';
+        setTimeout(() => card.style.transform = '', 150);
+      }
+
+      // Create session and navigate to game
+      try {
+        const session = await SessionManager.createSession(ageGroup);
+
+        // Register on server
+        API.session.create(session.sessionId, ageGroup);
+
+        // Navigate to correct game
+        const routes = {
+          toddler: 'game-toddler.html',
+          kid:     'game-kid.html',
+          teen:    'game-teen.html',
+          adult:   'game-adult.html',
+        };
+
+        // Small delay for animation
+        setTimeout(() => {
+          window.location.href = routes[ageGroup];
+        }, 180);
+
+      } catch (err) {
+        showToast('Something went wrong — please try again!');
+        console.error('[Play] Session create error:', err);
+      }
+    };
+
+    // ─── RESUME SESSION ───────────────────────────────────────
+
+    window.resumeSession = (sessionId) => {
+      const session = SessionManager.loadSession(sessionId);
+      if (!session) return;
+
+      // Set as current session
+      localStorage.setItem('gr_current_session', sessionId);
+
+      // Navigate based on session state
+      if (session.letterRevealed) {
+        window.location.href = `letter.html`;
+      } else if (session.voucherCode) {
+        window.location.href = `scratch.html`;
+      } else if (session.status === 'completed') {
+        window.location.href = `result.html`;
+      } else {
+        const routes = { toddler:'game-toddler.html', kid:'game-kid.html', teen:'game-teen.html', adult:'game-adult.html' };
+        window.location.href = routes[session.ageGroup] || 'index.html';
+      }
+    };
+
+    // ─── COOLDOWN MODAL ───────────────────────────────────────
+
+    let cooldownInterval = null;
+
+    const showCooldown = (remainingMs) => {
+      const modal   = document.getElementById('cooldownModal');
+      const display = document.getElementById('cooldownDisplay');
+      modal.classList.remove('hidden');
+
+      let remaining = Math.ceil(remainingMs / 1000);
+
+      const update = () => {
+        const m = Math.floor(remaining / 60);
+        const s = remaining % 60;
+        display.textContent = `${m}:${s.toString().padStart(2,'0')}`;
+        if (remaining <= 0) {
+          clearInterval(cooldownInterval);
+          modal.classList.add('hidden');
+        }
+        remaining--;
+      };
+      update();
+      cooldownInterval = setInterval(update, 1000);
+    };
+
+    // ─── TOAST ────────────────────────────────────────────────
+
+    window.showToast = (message, type = '') => {
+      const container = document.getElementById('toastContainer');
+      const toast     = document.createElement('div');
+      toast.className = `toast${type ? ` toast--${type}` : ''}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 4000);
+    };
+
+    init();
+  </script>
+</body>
+</html>

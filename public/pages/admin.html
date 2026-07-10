@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0D0B1E">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Admin — Baby Reveal 🎛️</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&family=Fredoka+One&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/animations.css">
+  <link rel="stylesheet" href="../css/layout.css">
+  <link rel="stylesheet" href="../css/components.css">
+
+  <style>
+    body { background: var(--navy-deepest); overflow-x: hidden; }
+
+    /* ── LOGIN SCREEN ─────────────────────────────────────── */
+    #loginScreen {
+      min-height: 100dvh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; padding: 1.5rem;
+    }
+    #loginScreen .lock-emoji { font-size: 3rem; margin-bottom: 1rem; }
+    #loginScreen h1 {
+      font-family: var(--font-display); font-size: 1.5rem;
+      margin-bottom: .5rem; text-align: center;
+    }
+    #loginScreen p { color: var(--text-secondary); font-size: .85rem; margin-bottom: 1.75rem; text-align: center; }
+    #loginError {
+      color: var(--error); font-size: .8rem; margin-top: 1rem;
+      min-height: 1.2rem; text-align: center;
+    }
+
+    /* ── DASHBOARD ────────────────────────────────────────── */
+    #dashboard { display: none; min-height: 100dvh; padding: 1.25rem 1.25rem 4rem; }
+    #dashboard.visible { display: block; }
+
+    .dash-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1.5rem; flex-wrap: wrap; gap: .5rem;
+    }
+    .dash-title { font-family: var(--font-display); font-size: 1.4rem; }
+    .dash-actions { display: flex; align-items: center; gap: .75rem; }
+
+    .section { margin-bottom: 1.75rem; }
+    .section-title {
+      font-size: .7rem; text-transform: uppercase; letter-spacing: .1em;
+      color: var(--text-muted); margin-bottom: .75rem; font-weight: 600;
+    }
+
+    /* Stat tiles */
+    .stat-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: .75rem;
+    }
+    .stat-tile {
+      background: var(--navy-card); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg); padding: .9rem 1rem;
+    }
+    .stat-tile__value {
+      font-family: var(--font-display); font-size: 1.5rem; font-weight: 700;
+      color: var(--gold-soft); line-height: 1.1;
+    }
+    .stat-tile__label { font-size: .68rem; color: var(--text-muted); margin-top: .3rem; }
+
+    /* Control grid */
+    .ctrl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+    @media (min-width: 560px) { .ctrl-grid { grid-template-columns: repeat(3, 1fr); } }
+
+    /* Letter board */
+    .letter-board {
+      display: grid; grid-template-columns: repeat(5, 1fr);
+      gap: .6rem; max-width: 420px;
+    }
+    .letter-slot { display: flex; flex-direction: column; align-items: center; gap: .3rem; }
+    .letter-slot .letter-box { width: 100%; }
+    .letter-slot .letter-tag { font-size: .58rem; color: var(--text-muted); }
+
+    /* Winner table wrap */
+    .table-wrap {
+      background: var(--navy-card); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg); padding: 1rem; overflow-x: auto;
+    }
+    .empty-note { color: var(--text-muted); font-size: .85rem; padding: .5rem 0; }
+
+    /* Action log */
+    .log-list { display: flex; flex-direction: column; gap: .4rem; max-height: 220px; overflow-y: auto; }
+    .log-row {
+      display: flex; justify-content: space-between; gap: .75rem;
+      font-size: .75rem; color: var(--text-secondary);
+      padding: .4rem .6rem; background: var(--navy-mid); border-radius: var(--radius-sm);
+    }
+    .log-row time { color: var(--text-muted); white-space: nowrap; }
+
+    .mini-btn {
+      font-size: .68rem; padding: .3rem .6rem; border-radius: var(--radius-full);
+      border: 1px solid var(--border-gold); background: transparent; color: var(--gold-soft);
+      cursor: pointer;
+    }
+    .mini-btn:hover { background: rgba(201,168,76,.1); }
+  </style>
+</head>
+<body>
+
+  <!-- ═══ LOGIN SCREEN ═══ -->
+  <main id="loginScreen">
+    <div class="lock-emoji">🔐</div>
+    <h1>Admin Access</h1>
+    <p>Enter the 6-digit PIN to control the party</p>
+
+    <div class="pin-wrap" id="pinWrap">
+      <input class="pin-digit" type="tel" inputmode="numeric" maxlength="1" data-i="0">
+      <input class="pin-digit" type="tel" inputmode="numeric" maxlength="1" data-i="1">
+      <input class="pin-digit" type="tel" inputmode="numeric" maxlength="1" data-i="2">
+      <input class="pin-digit" type="tel" inputmode="numeric" maxlength="1" data-i="3">
+      <input class="pin-digit" type="tel" inputmode="numeric" maxlength="1" data-i="4">
+      <input class="pin-digit" type="tel" inputmode="numeric" maxlength="1" data-i="5">
+    </div>
+    <div id="loginError"></div>
+  </main>
+
+  <!-- ═══ DASHBOARD ═══ -->
+  <div id="dashboard">
+
+    <div class="dash-header">
+      <div class="dash-title">🎛️ Party Control</div>
+      <div class="dash-actions">
+        <span class="live-indicator"><span class="live-dot"></span> Live</span>
+        <span class="badge badge-gold" id="stateBadge">—</span>
+        <button class="mini-btn" onclick="logout()">Log out</button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="section">
+      <div class="section-title">Live Stats</div>
+      <div class="stat-grid">
+        <div class="stat-tile"><div class="stat-tile__value" id="statActive">0</div><div class="stat-tile__label">Guests Playing</div></div>
+        <div class="stat-tile"><div class="stat-tile__value" id="statGames">0</div><div class="stat-tile__label">Games Completed</div></div>
+        <div class="stat-tile"><div class="stat-tile__value" id="statPool">0</div><div class="stat-tile__label">Eligible Pool</div></div>
+        <div class="stat-tile"><div class="stat-tile__value" id="statWinners">0/10</div><div class="stat-tile__label">Vouchers Drawn</div></div>
+        <div class="stat-tile"><div class="stat-tile__value" id="statLetters">0/10</div><div class="stat-tile__label">Letters Revealed</div></div>
+        <div class="stat-tile"><div class="stat-tile__value" id="statAttempts">0/3</div><div class="stat-tile__label">Couple Attempts</div></div>
+      </div>
+    </div>
+
+    <!-- State controls -->
+    <div class="section">
+      <div class="section-title">Party State</div>
+      <div class="ctrl-grid">
+        <button class="ctrl-btn ctrl-btn--success" onclick="setState('active')">
+          <span><span class="ctrl-btn__label">▶️ START</span><br><span class="ctrl-btn__sub">Open games to everyone</span></span>
+        </button>
+        <button class="ctrl-btn" onclick="setState('finale')">
+          <span><span class="ctrl-btn__label">🔒 LOCK</span><br><span class="ctrl-btn__sub">Close games → couple's turn</span></span>
+        </button>
+        <button class="ctrl-btn" onclick="setState('waiting')">
+          <span><span class="ctrl-btn__label">⏮️ Back to Waiting</span><br><span class="ctrl-btn__sub">Return to start screen</span></span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="section">
+      <div class="section-title">Actions</div>
+      <div class="ctrl-grid">
+        <button class="ctrl-btn ctrl-btn--success" onclick="triggerDraw()">
+          <span><span class="ctrl-btn__label">🎟️ TRIGGER DRAW</span><br><span class="ctrl-btn__sub">Pick 10 winners</span></span>
+        </button>
+        <button class="ctrl-btn" onclick="nudge()">
+          <span><span class="ctrl-btn__label">📣 NUDGE</span><br><span class="ctrl-btn__sub">Alert pending winners</span></span>
+        </button>
+        <button class="ctrl-btn" onclick="forceVideo()">
+          <span><span class="ctrl-btn__label">🎬 FORCE VIDEO</span><br><span class="ctrl-btn__sub">Override → unlock reveal</span></span>
+        </button>
+        <button class="ctrl-btn" onclick="resetAttempts()">
+          <span><span class="ctrl-btn__label">🔁 Reset Attempts</span><br><span class="ctrl-btn__sub">Couple's puzzle counter</span></span>
+        </button>
+        <button class="ctrl-btn ctrl-btn--danger" onclick="resetParty()">
+          <span><span class="ctrl-btn__label">🗑️ RESET PARTY</span><br><span class="ctrl-btn__sub">Wipe back to Waiting</span></span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Letter board -->
+    <div class="section">
+      <div class="section-title">Letter Board</div>
+      <div class="letter-board" id="letterBoard"></div>
+    </div>
+
+    <!-- Winner table -->
+    <div class="section">
+      <div class="section-title">Winners</div>
+      <div class="table-wrap">
+        <table class="admin-table" id="winnerTable">
+          <thead>
+            <tr><th>#</th><th>Voucher</th><th>Letter</th><th>Age</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody id="winnerTableBody"></tbody>
+        </table>
+        <div class="empty-note" id="winnerEmptyNote">No draw yet.</div>
+      </div>
+    </div>
+
+    <!-- Action log -->
+    <div class="section">
+      <div class="section-title">Action Log</div>
+      <div class="log-list" id="logList"></div>
+    </div>
+
+  </div>
+
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <script type="module">
+    import API from '../js/core/api.js';
+
+    const TOKEN_KEY  = 'gr_admin_token';
+    const POLL_MS    = 5000;
+    let pollTimer    = null;
+
+    // ─── SHA-256 HELPER ─────────────────────────────────────
+    const sha256 = async (message) => {
+      const buf  = new TextEncoder().encode(message);
+      const hash = await crypto.subtle.digest('SHA-256', buf);
+      return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+    };
+
+    const getToken = () => sessionStorage.getItem(TOKEN_KEY);
+    const setToken = (t) => sessionStorage.setItem(TOKEN_KEY, t);
+    const clearToken = () => sessionStorage.removeItem(TOKEN_KEY);
+
+    // ─── TOAST ──────────────────────────────────────────────
+    const showToast = (message, type = '') => {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast${type ? ` toast--${type}` : ''}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 4000);
+    };
+
+    // ─── PIN INPUT ──────────────────────────────────────────
+    const pinInputs = Array.from(document.querySelectorAll('.pin-digit'));
+
+    pinInputs.forEach((input, i) => {
+      input.addEventListener('input', () => {
+        input.value = input.value.replace(/\D/g, '').slice(0, 1);
+        if (input.value && i < pinInputs.length - 1) pinInputs[i + 1].focus();
+        if (pinInputs.every(inp => inp.value)) attemptLogin();
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && !input.value && i > 0) pinInputs[i - 1].focus();
+      });
+    });
+
+    const attemptLogin = async () => {
+      const pin = pinInputs.map(i => i.value).join('');
+      const errEl = document.getElementById('loginError');
+      errEl.textContent = '';
+
+      const pinHash = await sha256(pin);
+      const res = await API.admin.login(pinHash);
+
+      if (!res.success) {
+        errEl.textContent = 'Incorrect PIN — try again';
+        pinInputs.forEach(i => { i.value = ''; });
+        pinInputs[0].focus();
+        return;
+      }
+
+      setToken(res.token);
+      showDashboard();
+    };
+
+    // ─── DASHBOARD ──────────────────────────────────────────
+    const showDashboard = () => {
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('dashboard').classList.add('visible');
+      refreshStats();
+      pollTimer = setInterval(refreshStats, POLL_MS);
+    };
+
+    window.logout = () => {
+      clearToken();
+      if (pollTimer) clearInterval(pollTimer);
+      window.location.reload();
+    };
+
+    const refreshStats = async () => {
+      const token = getToken();
+      if (!token) return;
+
+      const res = await API.admin.stats(token);
+      if (!res.success) {
+        if (res.status === 401) {
+          showToast('Session expired — please log in again');
+          logout();
+        }
+        return;
+      }
+
+      renderStats(res);
+    };
+
+    const AGE_EMOJI = { toddler: '🍼', kid: '🎈', teen: '🎮', adult: '🎉' };
+
+    const renderStats = (d) => {
+      document.getElementById('stateBadge').textContent = d.state.toUpperCase();
+      document.getElementById('statActive').textContent  = d.activePlayers;
+      document.getElementById('statGames').textContent   = d.gamesCompleted;
+      document.getElementById('statPool').textContent    = d.eligiblePoolSize;
+      document.getElementById('statWinners').textContent = `${d.winnersCount}/${d.totalVouchers}`;
+      document.getElementById('statLetters').textContent = `${d.lettersRevealedCount}/${d.totalVouchers}`;
+      document.getElementById('statAttempts').textContent = `${d.coupleAttempts}/3`;
+
+      // Letter board
+      const board = document.getElementById('letterBoard');
+      const byPosition = {};
+      d.winners.forEach(w => byPosition[w.position] = w);
+
+      board.innerHTML = Array.from({ length: d.totalVouchers }, (_, pos) => {
+        const w = byPosition[pos];
+        if (!w) {
+          return `<div class="letter-slot">
+            <div class="letter-box letter-box--empty">?</div>
+            <span class="letter-tag">unassigned</span>
+          </div>`;
+        }
+        const cls = w.status === 'revealed' ? 'letter-box--correct' : 'letter-box--filled';
+        return `<div class="letter-slot">
+          <div class="letter-box ${cls}">${w.letter}</div>
+          <span class="letter-tag">${w.status === 'revealed' ? '✅ scratched' : '⏳ waiting'}</span>
+        </div>`;
+      }).join('');
+
+      // Winner table
+      const tbody = document.getElementById('winnerTableBody');
+      const emptyNote = document.getElementById('winnerEmptyNote');
+      if (!d.winners.length) {
+        tbody.innerHTML = '';
+        emptyNote.style.display = 'block';
+      } else {
+        emptyNote.style.display = 'none';
+        tbody.innerHTML = d.winners.map(w => `
+          <tr>
+            <td>${w.position + 1}</td>
+            <td>${w.voucherCode}</td>
+            <td>${w.letter}</td>
+            <td>${AGE_EMOJI[w.ageGroup] || ''} ${w.ageGroup}</td>
+            <td>${w.status === 'revealed'
+                ? '<span class="badge badge-success">Scratched</span>'
+                : '<span class="badge badge-warning">Waiting</span>'}</td>
+            <td>${w.status === 'revealed' ? '' :
+                `<button class="mini-btn" onclick="forceRevealVoucher('${w.voucherCode}')">Force reveal</button>`}</td>
+          </tr>
+        `).join('');
+      }
+
+      // Action log
+      const logList = document.getElementById('logList');
+      if (!d.actionLog.length) {
+        logList.innerHTML = '<div class="empty-note">No actions yet.</div>';
+      } else {
+        logList.innerHTML = d.actionLog.map(entry => `
+          <div class="log-row">
+            <span>${entry.action}</span>
+            <time>${new Date(entry.at).toLocaleTimeString()}</time>
+          </div>
+        `).join('');
+      }
+    };
+
+    // ─── CONTROLS ───────────────────────────────────────────
+
+    window.setState = async (state) => {
+      const token = getToken();
+      const res = await API.partyState.set(state, token);
+      if (res.success) {
+        showToast(`Party state → ${state.toUpperCase()}`);
+        refreshStats();
+      } else {
+        showToast(res.error || 'Failed to change state', 'error');
+      }
+    };
+
+    window.triggerDraw = async () => {
+      if (!confirm('Draw 10 winners now? This cannot be undone without a full reset.')) return;
+      const res = await API.admin.draw(getToken());
+      if (res.success) {
+        showToast(`🎟️ Drew ${res.winnersCount} winner(s)!`, 'success');
+        refreshStats();
+      } else {
+        showToast(res.error || 'Draw failed', 'error');
+      }
+    };
+
+    window.nudge = async () => {
+      const res = await API.admin.nudge(getToken());
+      showToast(res.success ? '📣 Nudge sent!' : (res.error || 'Failed'), res.success ? 'success' : 'error');
+    };
+
+    window.forceVideo = async () => {
+      if (!confirm('Force-unlock the reveal video now?')) return;
+      const res = await API.admin.forceVideo(getToken());
+      showToast(res.success ? '🎬 Video unlocked!' : (res.error || 'Failed'), res.success ? 'success' : 'error');
+    };
+
+    window.resetAttempts = async () => {
+      const res = await API.admin.resetAttempts(getToken());
+      showToast(res.success ? '🔁 Attempts reset' : (res.error || 'Failed'), res.success ? 'success' : 'error');
+      refreshStats();
+    };
+
+    window.resetParty = async () => {
+      if (!confirm('This wipes ALL progress back to WAITING — vouchers, draw, letters, state. Are you sure?')) return;
+      if (!confirm('Really sure? This cannot be undone.')) return;
+      const res = await API.admin.resetParty(getToken());
+      showToast(res.success ? '🗑️ Party reset' : (res.error || 'Failed'), res.success ? 'success' : 'error');
+      refreshStats();
+    };
+
+    window.forceRevealVoucher = async (voucherCode) => {
+      const res = await API.admin.forceReveal(voucherCode, getToken());
+      showToast(res.success ? `✅ Revealed letter "${res.letter}"` : (res.error || 'Failed'), res.success ? 'success' : 'error');
+      refreshStats();
+    };
+
+    // ─── INIT ───────────────────────────────────────────────
+    const init = () => {
+      const token = getToken();
+      if (token) {
+        showDashboard();
+      } else {
+        pinInputs[0].focus();
+      }
+    };
+    init();
+  </script>
+</body>
+</html>

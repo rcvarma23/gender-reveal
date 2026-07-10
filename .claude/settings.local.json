@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(npm approve-scripts --allow-scripts-pending)",
+      "PowerShell(npm ls -g --depth=0 2>$null)",
+      "PowerShell(claude --version)",
+      "Skill(update-config)",
+      "Bash(ls -la \".claude\")",
+      "Bash(find \"/c/Users/ramcv/Downloads/files/gender-reveal-complete/gender-reveal\" -maxdepth 1)",
+      "Bash(node --check workers/admin-controls.js)",
+      "Bash(node -e ' *)",
+      "Bash(node --input-type=module --check workers/admin-controls.js)",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
+    ]
+  },
+  "enabledPlugins": {
+    "frontend-design@claude-plugins-official": true,
+    "superpowers@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true
+  }
+}

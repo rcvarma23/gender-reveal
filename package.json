@@ -1,0 +1,8 @@
+{
+  "name":"gender-reveal",
+  "version":"0.0.1",
+  "private":true,
+  "scripts":{
+    "start":"echo 'Serve static files from public/'"
+  }
+}
