@@ -12,6 +12,7 @@ export default function createGame(container, config, callbacks) {
   let elapsed = 0;
   let ended = false;
   let durationTimer = null;
+  let mismatchTimer = null;
   const startedAt = Date.now();
 
   const deck = [...config.emojis.slice(0, totalPairs), ...config.emojis.slice(0, totalPairs)]
@@ -57,11 +58,12 @@ export default function createGame(container, config, callbacks) {
         callbacks.onProgress(Math.round((matched / totalPairs) * 100));
         if (matched >= totalPairs) finish();
       } else {
-        setTimeout(() => {
+        mismatchTimer = setTimeout(() => {
           a.textContent = '❔';
           b.textContent = '❔';
           flipped = [];
           locked = false;
+          mismatchTimer = null;
         }, config.flipBackMs);
       }
     }
@@ -87,6 +89,7 @@ export default function createGame(container, config, callbacks) {
     destroy() {
       ended = true;
       clearInterval(durationTimer);
+      clearTimeout(mismatchTimer);
       cards.forEach(c => c.replaceWith());
       grid.remove();
     },
