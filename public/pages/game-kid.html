@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0D0B1E">
+  <title>Kid Games 🎈</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&family=Fredoka+One&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/animations.css">
+  <link rel="stylesheet" href="../css/layout.css">
+  <link rel="stylesheet" href="../css/components.css">
+
+  <style>
+    body { background: var(--navy-deepest); overflow-x: hidden; }
+    .page-inner { position: relative; z-index: 2; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; padding: 1.5rem 1.25rem 3rem; }
+    .header-row { display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 420px; margin-bottom: 1.5rem; }
+    .picker-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .875rem; width: 100%; max-width: 420px; }
+    .game-card { background: var(--navy-surface); border: 1.5px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 1.75rem 1rem; text-align: center; cursor: pointer; transition: all var(--transition-slow); -webkit-tap-highlight-color: transparent; }
+    .game-card:hover, .game-card:focus { border-color: var(--border-gold); background: var(--navy-card); transform: translateY(-3px); outline: none; }
+    .game-card .card-emoji { font-size: 3rem; display: block; margin-bottom: .5rem; }
+    .game-card .card-name  { font-size: 1rem; font-weight: 600; color: var(--gold-soft); }
+    #gameStage { display: none; width: 100%; max-width: 420px; height: 60vh; background: var(--navy-surface); border-radius: var(--radius-lg); border: 1.5px solid var(--border-subtle); position: relative; overflow: hidden; }
+    .reveal-overlay { position: fixed; inset: 0; z-index: 9999; display: none; align-items: center; justify-content: center; background: rgba(8,7,23,.92); text-align: center; padding: 1.5rem; }
+    .reveal-overlay.visible { display: flex; }
+    .reveal-card { display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+    .reveal-emoji { font-size: 5rem; }
+    .reveal-name  { font-family: var(--font-display); font-size: 1.3rem; color: var(--gold-soft); }
+    .back-btn {
+      display: flex; align-items: center; gap: .4rem;
+      background: transparent; border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-full); padding: .45rem 1rem;
+      color: var(--text-muted); font-size: .8rem; cursor: pointer;
+      transition: all var(--transition-base); font-family: var(--font-body);
+    }
+    .back-btn:hover { border-color: var(--border-gold); color: var(--gold-soft); }
+  </style>
+</head>
+<body>
+  <main class="page-inner">
+    <div class="header-row">
+      <button class="back-btn" onclick="window.location.href='play.html'">← Back</button>
+      <a class="badge badge-gold" href="sticker-book.html" style="text-decoration:none">🎀 Sticker Book</a>
+    </div>
+
+    <div class="picker-grid" id="pickerGrid">
+      <div class="game-card" data-game="emoji-match" tabindex="0" onclick="playGame('emoji-match')">
+        <span class="card-emoji">🃏</span>
+        <span class="card-name">Emoji Match</span>
+      </div>
+      <div class="game-card" data-game="baby-scramble" tabindex="0" onclick="playGame('baby-scramble')">
+        <span class="card-emoji">🔤</span>
+        <span class="card-name">Word Scramble</span>
+      </div>
+    </div>
+
+    <div id="gameStage"></div>
+  </main>
+
+  <div class="reveal-overlay" id="revealOverlay">
+    <div class="reveal-card">
+      <div class="reveal-emoji" id="revealEmoji"></div>
+      <div class="reveal-name" id="revealName"></div>
+      <div style="display:flex;gap:.75rem">
+        <button class="btn btn-secondary" id="playAgainBtn">Play Again</button>
+        <button class="btn btn-secondary" id="chooseAnotherBtn">Choose Another Game</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import EmojiMatch     from '../js/games/emoji-match.js';
+    import BabyScramble   from '../js/games/baby-scramble.js';
+    import SessionManager from '../js/core/session.js';
+    import API            from '../js/core/api.js';
+    import PartyState     from '../js/core/state.js';
+    import Confetti       from '../js/systems/confetti.js';
+    import GAME_CONFIG     from '../../config/game-config.js';
+
+    const GAMES = { 'emoji-match': EmojiMatch, 'baby-scramble': BabyScramble };
+    const RARITY_PALETTE = { common: 'gold', uncommon: 'gold', rare: 'celebration', legendary: 'celebration', secret: 'celebration' };
+
+    let currentGame = null;
+    let currentGameType = null;
+
+    const session = SessionManager.getCurrentSession();
+    if (!session || session.ageGroup !== 'kid') {
+      window.location.href = 'play.html';
+    }
+
+    PartyState.startPolling((state) => {
+      if (state === 'waiting')  window.location.href = 'index.html';
+      if (state === 'revealed') window.location.href = 'reveal.html';
+    });
+
+    window.playGame = (gameType) => {
+      currentGameType = gameType;
+      document.getElementById('pickerGrid').style.display = 'none';
+      const stage = document.getElementById('gameStage');
+      stage.style.display = 'block';
+      stage.innerHTML = '';
+
+      const config = GAME_CONFIG.kid[gameType];
+      currentGame = GAMES[gameType](stage, config, {
+        onProgress: (pct) => SessionManager.updateSession({ gameProgress: pct }),
+        onComplete: (score) => onGameComplete(gameType, score),
+      });
+      currentGame.start();
+    };
+
+    const onGameComplete = async (gameType, score) => {
+      SessionManager.updateSession({ gameProgress: 100, score, status: 'completed' });
+      SessionManager.markKidPlayed();
+
+      API.session.complete(session.sessionId, { score, gameType, startedAt: session.startedAt });
+      const result = await API.stickers.earn(session.sessionId, gameType);
+
+      if (result.success) showReveal(result.sticker);
+    };
+
+    const showReveal = (sticker) => {
+      document.getElementById('revealEmoji').textContent = sticker.emoji;
+      document.getElementById('revealName').textContent = sticker.name;
+      document.getElementById('revealOverlay').classList.add('visible');
+      Confetti.burst({ palette: RARITY_PALETTE[sticker.rarity] || 'gold' });
+    };
+
+    document.getElementById('playAgainBtn').addEventListener('click', () => {
+      document.getElementById('revealOverlay').classList.remove('visible');
+      if (currentGame) currentGame.destroy();
+      window.playGame(currentGameType);
+    });
+
+    document.getElementById('chooseAnotherBtn').addEventListener('click', () => {
+      document.getElementById('revealOverlay').classList.remove('visible');
+      if (currentGame) currentGame.destroy();
+      document.getElementById('gameStage').style.display = 'none';
+      document.getElementById('pickerGrid').style.display = 'grid';
+    });
+  </script>
+</body>
+</html>
