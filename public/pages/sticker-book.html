@@ -46,7 +46,7 @@
   <main class="page-inner">
     <div class="header-row">
       <a class="back-btn" href="play.html" style="text-decoration:none">← Back to Games</a>
-      <div class="badge badge-gold" id="countBadge">0 / 13</div>
+      <div class="badge badge-gold" id="countBadge"></div>
     </div>
 
     <div class="sticker-grid" id="stickerGrid"></div>
@@ -68,7 +68,8 @@
 
       const grid = document.getElementById('stickerGrid');
       const ownedNonSecret = Object.keys(countsById).filter(id => id !== 'reveal').length;
-      document.getElementById('countBadge').textContent = `${ownedNonSecret} / 12`;
+      const totalEarnable = STICKER_CATALOG.stickers.filter(s => s.weight > 0).length;
+      document.getElementById('countBadge').textContent = `${ownedNonSecret} / ${totalEarnable}`;
 
       grid.innerHTML = STICKER_CATALOG.stickers.map((sticker) => {
         if (sticker.id === 'reveal') {
