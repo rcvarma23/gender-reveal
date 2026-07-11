@@ -5,6 +5,8 @@
  * waiting → active → finale → revealed
  */
 
+import DeviceManager from './device.js';
+
 const PartyState = (() => {
 
   // ─── STATE MACHINE ─────────────────────────────────────────
@@ -51,9 +53,10 @@ const PartyState = (() => {
 
   const pollState = async () => {
     try {
+      const deviceId = DeviceManager.getDeviceId();
       const response = await fetch('/api/party-state', {
         method:  'GET',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
         // Short timeout — we don't want guests stuck waiting
         signal:  AbortSignal.timeout(5000),
       });
@@ -101,6 +104,23 @@ const PartyState = (() => {
       sessionStorage.setItem('gr_is_winner', data.isWinner ? 'true' : 'false');
       sessionStorage.setItem('gr_voucher_code', data.voucherCode || '');
     }
+
+    maybeRedirectToVoucher(data);
+  };
+
+  // ─── WINNER REDIRECT ───────────────────────────────────────
+
+  // Only auto-redirect from the "hub" pages — never yank a guest away
+  // mid-game on a game-*.html page just because a draw landed.
+  // Wrangler serves assets on extensionless paths (play.html -> play),
+  // so match both forms.
+  const AUTO_REDIRECT_PAGES = ['index.html', 'index', 'play.html', 'play', ''];
+
+  const maybeRedirectToVoucher = (data) => {
+    if (!data.isWinner) return;
+    const page = location.pathname.split('/').pop();
+    if (!AUTO_REDIRECT_PAGES.includes(page)) return;
+    window.location.href = data.letter ? 'letter.html' : 'scratch.html';
   };
 
   // ─── STATE CHANGE HANDLERS ─────────────────────────────────

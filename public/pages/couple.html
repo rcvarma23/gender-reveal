@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0D0B1E">
+  <title>Couple's Finale 💌</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/animations.css">
+  <link rel="stylesheet" href="../css/layout.css">
+  <link rel="stylesheet" href="../css/components.css">
+
+  <style>
+    body { background: var(--navy-deepest); overflow-x: hidden; }
+    .page-inner { position: relative; z-index: 2; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1.5rem 1.25rem 3rem; gap: 1.5rem; text-align: center; }
+    .headline { font-family: var(--font-display); font-size: 1.4rem; color: var(--gold-soft); }
+    .subline  { font-size: .9rem; color: var(--text-muted); max-width: 300px; }
+    .pin-input { font-size: 1.8rem; letter-spacing: .5em; text-align: center; width: 100%; max-width: 220px; padding: .75rem; border-radius: var(--radius-md); border: 1.5px solid var(--border-subtle); background: var(--navy-surface); color: var(--text-primary); }
+    .letters-row { display: flex; gap: .4rem; flex-wrap: wrap; justify-content: center; max-width: 340px; }
+    .letter-input { width: 2.4rem; height: 2.8rem; text-align: center; font-size: 1.3rem; text-transform: uppercase; border-radius: var(--radius-md); border: 1.5px solid var(--border-subtle); background: var(--navy-surface); color: var(--gold-soft); }
+    .letter-input:focus { border-color: var(--border-gold); outline: none; }
+    .match-status { font-size: .85rem; color: var(--text-muted); }
+    .error-text { color: #E57373; font-size: .85rem; min-height: 1.2rem; }
+    #letterStep { display: none; }
+  </style>
+</head>
+<body>
+  <main class="page-inner">
+
+    <div id="notFinaleStep">
+      <div class="headline">Not quite time yet 🕰️</div>
+      <div class="subline">The finale unlocks once the host locks the games. Hang tight!</div>
+    </div>
+
+    <div id="pinStep" style="display:none">
+      <div class="headline">Couple's Finale</div>
+      <div class="subline" style="margin-bottom:1rem">Enter your PIN to begin</div>
+      <input class="pin-input" id="pinInput" type="password" inputmode="numeric" maxlength="6" placeholder="••••••">
+      <div class="error-text" id="pinError"></div>
+      <button class="btn btn-primary" id="pinSubmitBtn" style="margin-top:1rem">Continue</button>
+    </div>
+
+    <div id="letterStep">
+      <div class="headline">Enter the letters you've collected</div>
+      <div class="subline" style="margin-bottom:1rem">Leave a box blank if you don't have that letter yet.</div>
+      <div class="letters-row" id="lettersRow"></div>
+      <div class="match-status" id="matchStatus" style="margin-top:1rem"></div>
+      <div class="error-text" id="letterError"></div>
+      <button class="btn btn-primary" id="checkLettersBtn" style="margin-top:1rem">Check Letters</button>
+    </div>
+
+  </main>
+
+  <script type="module">
+    import API from '../js/core/api.js';
+
+    const TOKEN_KEY = 'gr_couple_token';
+    const LETTER_COUNT = 10;
+
+    const notFinaleStep = document.getElementById('notFinaleStep');
+    const pinStep       = document.getElementById('pinStep');
+    const letterStep    = document.getElementById('letterStep');
+
+    const sha256 = async (message) => {
+      const buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(message));
+      return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+    };
+
+    const showStep = (step) => {
+      notFinaleStep.style.display = step === 'notFinale' ? 'block' : 'none';
+      pinStep.style.display       = step === 'pin'       ? 'block' : 'none';
+      letterStep.style.display    = step === 'letters'   ? 'block' : 'none';
+    };
+
+    const buildLetterInputs = () => {
+      const row = document.getElementById('lettersRow');
+      row.innerHTML = '';
+      for (let i = 0; i < LETTER_COUNT; i++) {
+        const input = document.createElement('input');
+        input.className = 'letter-input';
+        input.maxLength = 1;
+        input.dataset.index = i;
+        input.addEventListener('input', () => {
+          input.value = input.value.toUpperCase().replace(/[^A-Z]/g, '');
+          if (input.value && input.nextElementSibling) input.nextElementSibling.focus();
+        });
+        row.appendChild(input);
+      }
+    };
+
+    const init = async () => {
+      const stateRes = await fetch('/api/party-state').then(r => r.json()).catch(() => null);
+      if (!stateRes || stateRes.state !== 'finale') {
+        showStep('notFinale');
+        return;
+      }
+
+      const existingToken = localStorage.getItem(TOKEN_KEY);
+      if (existingToken) {
+        // Already verified earlier this finale — skip straight to the puzzle
+        window.location.href = 'couple-game.html';
+        return;
+      }
+
+      buildLetterInputs();
+      showStep('pin');
+    };
+
+    document.getElementById('pinSubmitBtn').addEventListener('click', async () => {
+      const pin = document.getElementById('pinInput').value.trim();
+      const errorEl = document.getElementById('pinError');
+      errorEl.textContent = '';
+
+      if (!pin) { errorEl.textContent = 'Enter your PIN'; return; }
+
+      const pinHash = await sha256(pin);
+      const result = await API.couple.verifyPin(pinHash);
+
+      if (!result.success) {
+        errorEl.textContent = 'Incorrect PIN — try again';
+        return;
+      }
+
+      localStorage.setItem(TOKEN_KEY, result.token);
+      showStep('letters');
+    });
+
+    document.getElementById('checkLettersBtn').addEventListener('click', async () => {
+      const token = localStorage.getItem(TOKEN_KEY);
+      const inputs = [...document.querySelectorAll('.letter-input')];
+      const letters = inputs.map(i => i.value || null);
+      const errorEl = document.getElementById('letterError');
+      const statusEl = document.getElementById('matchStatus');
+      errorEl.textContent = '';
+
+      const result = await API.couple.checkLetters(letters, token);
+
+      if (!result.success) {
+        errorEl.textContent = result.error || 'Something went wrong — try again';
+        return;
+      }
+
+      statusEl.textContent = `${result.matchCount} / ${result.required} needed matched`;
+
+      if (result.unlocked) {
+        window.location.href = 'couple-game.html';
+      } else {
+        errorEl.textContent = "Not quite enough yet — collect a few more letters and try again!";
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>

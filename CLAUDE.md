@@ -34,28 +34,34 @@ No database. No framework. Vanilla HTML/CSS/JS + ES modules.
 ```
 gender-reveal/
 ├── CLAUDE.md                        ← YOU ARE HERE
-├── wrangler.toml                    ← Cloudflare deployment config
-│
-├── config/
-│   ├── party-config.js              ← Master config: secret code, PINs, rules
-│   ├── game-config.js               ← Game timing/difficulty per age group
-│   └── sticker-catalog.js           ← All 13 stickers with rarity weights
+├── wrangler.toml                    ← Cloudflare deployment config (main = workers/index.js)
 │
 ├── public/
+│   ├── config/                      ← moved under public/ so Wrangler's [assets] can serve it
+│   │   │                               to the browser (config/ at repo root is unreachable —
+│   │   │                               only ./public is served; see wrangler.toml [assets])
+│   │   ├── party-config.js          ← Human-reference config; NOT imported by any code —
+│   │   │                               Workers/session/sticker logic hardcode their own
+│   │   │                               constants independently. Keep both in sync by hand.
+│   │   ├── game-config.js           ✅ DONE — Game timing/difficulty per age group
+│   │   └── sticker-catalog.js       ✅ DONE — 12 earnable + 1 secret sticker, rarity weights
+│   │
 │   ├── pages/
 │   │   ├── index.html               ✅ DONE — Waiting screen (celestial starfield)
 │   │   ├── play.html                ✅ DONE — Age group selector
-│   │   ├── game-toddler.html        ❌ TODO Phase 3 — Balloon pop + feed baby
-│   │   ├── game-kid.html            ❌ TODO Phase 3 — Emoji match + scramble
-│   │   ├── game-teen.html           ❌ TODO Phase 4 — Trivia + hard scramble
-│   │   ├── game-adult.html          ❌ TODO Phase 4 — Predictions quiz
-│   │   ├── result.html              ❌ TODO Phase 4 — Win/lose + handoff
-│   │   ├── sticker-book.html        ❌ TODO Phase 3 — Kid sticker collection
-│   │   ├── scratch.html             ❌ TODO Phase 5 — Scratch card canvas
-│   │   ├── letter.html              ❌ TODO Phase 5 — Letter reveal screen
-│   │   ├── couple.html              ❌ TODO Phase 6 — PIN entry
-│   │   ├── couple-game.html         ❌ TODO Phase 6 — Timed letter puzzle
-│   │   ├── reveal.html              ❌ TODO Phase 6 — Video reveal
+│   │   ├── game-toddler.html        ✅ DONE — Balloon pop + feed baby
+│   │   ├── game-kid.html            ✅ DONE — Emoji match + scramble
+│   │   ├── game-teen.html           ✅ DONE — Trivia + hard scramble, one turn only
+│   │   ├── game-adult.html          ✅ DONE — Predictions quiz, one turn only
+│   │   ├── result.html              ❌ TODO Phase 7 — dedicated non-winner recap page
+│   │   │                               (teen/adult currently show an inline neutral
+│   │   │                               "thanks for playing" overlay instead)
+│   │   ├── sticker-book.html        ✅ DONE — Kid sticker collection
+│   │   ├── scratch.html             ✅ DONE — Scratch card canvas
+│   │   ├── letter.html              ✅ DONE — Letter reveal screen (resumable)
+│   │   ├── couple.html              ✅ DONE — PIN entry + collected-letters check
+│   │   ├── couple-game.html         ✅ DONE — Timed letter puzzle + video + gender confirm
+│   │   ├── reveal.html              ✅ DONE — Gender flood screen + secret sticker unlock
 │   │   └── admin.html               ✅ DONE — Admin control panel
 │   │
 │   ├── css/
@@ -68,7 +74,8 @@ gender-reveal/
 │   │   ├── core/
 │   │   │   ├── device.js            ✅ DONE — Device ID + fingerprinting
 │   │   │   ├── session.js           ✅ DONE — Player session manager
-│   │   │   ├── state.js             ✅ DONE — Party state polling
+│   │   │   ├── state.js             ✅ DONE — Party state polling + auto-redirect to
+│   │   │   │                           scratch.html/letter.html when isWinner turns true
 │   │   │   ├── storage.js           ✅ DONE — localStorage wrapper
 │   │   │   └── api.js               ✅ DONE — All Worker API calls
 │   │   │
@@ -76,16 +83,19 @@ gender-reveal/
 │   │   │   ├── fingerprint.js       ✅ DONE — Browser fingerprinting
 │   │   │   ├── tab-guard.js         ✅ DONE — Multi-tab farming detection
 │   │   │   ├── confetti.js          ✅ DONE — Particle confetti engine
-│   │   │   └── scratch-card.js      ❌ TODO Phase 5
+│   │   │   └── scratch-card.js      ✅ DONE — Canvas scratch-off, threshold-based reveal
 │   │   │
-│   │   ├── games/                   ❌ TODO Phase 3 & 4
+│   │   ├── games/                   ✅ DONE — all 6
 │   │   │   ├── balloon-pop.js
 │   │   │   ├── feed-baby.js
 │   │   │   ├── emoji-match.js
-│   │   │   ├── baby-scramble.js
+│   │   │   ├── baby-scramble.js       (shared by kid + teen-hard, config-driven)
 │   │   │   ├── trivia.js
-│   │   │   ├── predictions.js
-│   │   │   └── couple-puzzle.js
+│   │   │   └── predictions.js
+│   │   │       (couple's letter puzzle lives inline in couple-game.html, not a
+│   │   │        separate games/ module — it's tightly coupled to attempt/hint
+│   │   │        state from the couple-game.js Worker, unlike the replayable
+│   │   │        mini-games above)
 │   │   │
 │   │   └── admin/                   ⚠️ SKIPPED — logic lives inline in admin.html
 │   │       ├── dashboard.js             (matches index.html/play.html precedent
@@ -95,15 +105,20 @@ gender-reveal/
 │   └── assets/
 │       ├── lottie/                  ❌ TODO — Download from lottiefiles.com
 │       ├── webp/stickers/           ❌ TODO — Create/source sticker images
-│       └── fonts/                   ❌ TODO — Self-host if needed
+│       └── fonts/                   ⚠️ PARTIAL — playfair-display.woff2 only
 │
 └── workers/
+    ├── index.js                     ✅ DONE — single Worker entrypoint; dispatches by path
+    │                                   prefix to the modules below (wrangler.toml can only
+    │                                   point `main` at one file — [[routes]] with a `script`
+    │                                   field is for zone-routed multi-worker deployments,
+    │                                   not sub-path routing within one project)
     ├── party-state.js               ✅ DONE — W1: GET/POST /api/party-state
     ├── session-manager.js           ✅ DONE — W2: /api/session/*
-    ├── voucher-engine.js            ❌ TODO Phase 5 — W3: /api/voucher/*
-    ├── sticker-system.js            ❌ TODO Phase 3 — W4: /api/sticker/*
+    ├── voucher-engine.js            ✅ DONE — W3: /api/voucher/*
+    ├── sticker-system.js            ✅ DONE — W4: /api/sticker/*
     ├── admin-controls.js            ✅ DONE — W5: /api/admin/*
-    └── couple-game.js               ❌ TODO Phase 6 — W6: /api/couple/*
+    └── couple-game.js               ✅ DONE — W6: /api/couple/*
 ```
 
 ---
@@ -115,11 +130,11 @@ gender-reveal/
 | **Phase 0** | Project scaffold, config files, wrangler | ✅ COMPLETE |
 | **Phase 1** | Core JS modules, CSS system, waiting screen, age selector, W1+W2 | ✅ COMPLETE |
 | **Phase 2** | Admin panel (admin.html + W5 worker) | ✅ COMPLETE |
-| **Phase 3** | Kid games (toddler + kid), sticker system, W4 worker | ❌ NEXT |
-| **Phase 4** | Teen + adult games, result screen, handoff flow | ❌ TODO |
-| **Phase 5** | Voucher system, scratch card, letter reveal, W3 worker | ❌ TODO |
-| **Phase 6** | Couple finale game, video reveal, W6 worker | ❌ TODO |
-| **Phase 7** | Testing, deploy, pre-party checklist | ❌ TODO |
+| **Phase 3** | Kid games (toddler + kid), sticker system, W4 worker | ✅ COMPLETE |
+| **Phase 4** | Teen + adult games, handoff flow | ✅ COMPLETE (result.html recap page still TODO) |
+| **Phase 5** | Voucher system, scratch card, letter reveal, W3 worker | ✅ COMPLETE |
+| **Phase 6** | Couple finale game, video reveal, W6 worker | ✅ COMPLETE (no reveal video file uploaded to R2 yet) |
+| **Phase 7** | Testing, deploy, pre-party checklist | ❌ NEXT |
 
 ---
 
@@ -245,43 +260,57 @@ URL: `/pages/admin.html`
 
 | Route | Worker | Description |
 |-------|--------|-------------|
-| `GET /api/party-state` | party-state.js | Poll state (guests, every 10s) |
+| `GET /api/party-state` | party-state.js | Poll state (guests, every 10s). Only reveals a winner's `letter` once their voucher's `status` is `revealed` — never leaks it early |
 | `POST /api/party-state` | party-state.js | Change state (admin only) |
 | `POST /api/session/create` | session-manager.js | Register new player |
-| `POST /api/session/complete` | session-manager.js | Lock session + anti-cheat |
+| `POST /api/session/complete` | session-manager.js | Lock session + anti-cheat. Only sets `device.lastCompletionAt` (cooldown clock) for adult/teen — a kid finishing must never cooldown-block the very next adult attempt on the same phone |
 | `GET /api/session/resume/:id` | session-manager.js | Resume state |
-| `POST /api/voucher/request` | voucher-engine.js | Request voucher (all 8 checks) |
-| `POST /api/voucher/scratch` | voucher-engine.js | Reveal letter |
-| `POST /api/sticker/earn` | sticker-system.js | Kid earns sticker |
+| `POST /api/voucher/request` | voucher-engine.js | Check/claim this device's voucher (post-draw only — winner selection itself happens in `admin/draw`) |
+| `POST /api/voucher/scratch` | voucher-engine.js | Reveal letter (only the winning device may scratch its own code) |
+| `GET /api/voucher/status/:code` | voucher-engine.js | Read-only status check, used by letter.html to recover a revealed letter after reload |
+| `POST /api/sticker/earn` | sticker-system.js | Kid earns sticker (weighted random, independent per call — not tied to game content) |
 | `GET /api/sticker/collection` | sticker-system.js | Get sticker collection |
+| `POST /api/sticker/unlock-reveal` | sticker-system.js | Adds the secret 🎀 sticker; called by reveal.html for kid-played devices |
 | `POST /api/admin/login` | admin-controls.js | Admin PIN verify |
 | `GET /api/admin/stats` | admin-controls.js | Live dashboard data |
-| `POST /api/admin/draw` | admin-controls.js | Trigger winner draw |
-| `POST /api/couple/verify-pin` | couple-game.js | Couple PIN check |
-| `POST /api/couple/check-letters` | couple-game.js | 7/10 match check |
-| `POST /api/couple/attempt` | couple-game.js | Record attempt + unlock video |
+| `POST /api/admin/draw` | admin-controls.js | Trigger winner draw (device dedupe + hard 10 cap) |
+| `POST /api/admin/nudge` / `force-reveal` / `reset-attempts` / `force-video` / `reset-party` | admin-controls.js | Admin overrides — see file header for each. Note: `reset-party` does NOT clear `device_{id}` cooldown/history records |
+| `POST /api/couple/verify-pin` | couple-game.js | Couple PIN check — only succeeds while `party_state === finale` |
+| `POST /api/couple/check-letters` | couple-game.js | Checks collected letters against the real `SECRET_CODE`; ≥ `LETTERS_NEEDED` matches unlocks the puzzle and generates the shuffled tile set |
+| `GET /api/couple/status` | couple-game.js | Resume state: attempt in progress, hints for that attempt, puzzle tiles, video-unlocked flag |
+| `POST /api/couple/attempt` | couple-game.js | Submit a puzzle attempt (3 max — attempt 3 always wins). Wrong attempts 1–2 return hints for the *next* attempt |
+| `POST /api/couple/reveal` | couple-game.js | Couple confirms gender (girl/boy) → flips `party_state` to `revealed`, which every guest's own poll picks up independently |
+| `GET /api/couple/video` | couple-game.js | Streams the reveal video from R2, gated on `video_unlocked`. 404s until a video file is actually uploaded |
 
 ---
 
 ## ⚙️ Cloudflare KV Keys Reference
 
 ```
-"party_state"           → waiting | active | finale | revealed
-"party_started_at"      → timestamp
-"party_gender"          → girl | boy (set at reveal)
-"active_players"        → count
-"games_completed"       → count
-"eligible_pool"         → JSON array of eligible sessions
-"draw_status"           → pending | complete
-"winner_device_{id}"    → { voucherCode, letter }
-"voucher_{code}"        → { letter, status, winnerId, scratchedAt }
-"session_{id}"          → full session object
-"device_{id}"           → device record (sessions, vouchersIssued, kidPlayedFirst)
-"stickers_{deviceId}"   → array of sticker objects
-"letters_revealed"      → array of revealed letters
-"couple_attempts"       → 0 | 1 | 2 | 3
-"video_unlocked"        → bool
-"admin_session_token"   → short-lived admin auth token
+"party_state"             → waiting | active | finale | revealed
+"party_started_at"        → timestamp
+"party_gender"            → girl | boy (set by couple/reveal)
+"gender_revealed"         → bool
+"active_players"          → count
+"games_completed"         → count
+"eligible_pool"           → JSON array of { sessionId, deviceId, ageGroup, addedAt }
+"draw_status"             → pending | complete
+"winner_device_{id}"      → { voucherCode, letter, position }
+"voucher_{code}"          → { code, letter, position, status, deviceId, sessionId,
+                              ageGroup, issuedAt, scratchedAt }
+"session_{id}"            → full session object (voucherCode/letterRevealed/letter
+                              get filled in by voucher-engine.js on scratch)
+"device_{id}"             → device record (sessions, vouchersIssued, kidPlayedFirst,
+                              lastCompletionAt — only set by adult/teen completions)
+"stickers_{deviceId}"     → array of sticker objects
+"letters_revealed"        → JSON array of { position, letter }
+"admin_session_token"     → short-lived admin auth token
+"admin_action_log"        → rolling JSON array of last 30 admin/couple actions
+"couple_session_token"    → couple's auth token (6h TTL)
+"couple_letters_confirmed"→ 'true' once ≥ LETTERS_NEEDED letters matched
+"couple_puzzle_letters"   → JSON array — the shuffled tile set (fixed once generated)
+"couple_attempts"         → 0 | 1 | 2 | 3
+"video_unlocked"          → bool
 ```
 
 ---
@@ -311,7 +340,10 @@ wrangler secret put SECRET_CODE       # The 10 letters e.g. "BABYLOVEIS"
 # Deploy
 wrangler deploy
 
-# Local dev
+# Local dev — reads secrets from .dev.vars (git-ignored), no real Cloudflare
+# resources needed. Currently seeded with test values: admin PIN 123456,
+# couple PIN 112233, SECRET_CODE=BABYLOVEIS. Replace with real values in a
+# separate .dev.vars before rehearsing with the real secret code.
 wrangler dev
 ```
 
@@ -332,24 +364,29 @@ wrangler dev
 
 ---
 
-## 🎯 What To Build Next (Phase 2)
+## 🎯 What To Build Next (Phase 7)
 
-Start with: **`public/pages/admin.html`** and **`workers/admin-controls.js`**
+All 6 build phases of game/voucher/couple logic are done. What's left before
+the real party:
 
-Admin panel needs:
-1. PIN login screen (6-digit, SHA-256 verified against Worker secret)
-2. Live stats dashboard (polls every 5s)
-3. Party state controls: START / LOCK / TRIGGER DRAW / FORCE VIDEO
-4. Letter board showing which of 10 letters are revealed
-5. Winner table with voucher status
-6. All actions logged to KV
-
-Then follow with Phase 3 (kid games) in this order:
-1. `workers/sticker-system.js` (W4)
-2. `public/js/games/balloon-pop.js`
-3. `public/pages/game-toddler.html`
-4. `public/js/systems/scratch-card.js`
-5. `public/pages/sticker-book.html`
+1. **Upload the actual reveal video** to R2: `wrangler r2 object put
+   gender-reveal-video/reveal-video.mp4 --file=<your-video>`. Without it,
+   `GET /api/couple/video` 404s and couple-game.html shows a graceful
+   "no video uploaded yet" fallback instead of playing anything.
+2. **Set real secrets before the party** — `.dev.vars` only has test values
+   (`ADMIN_PIN_HASH`/`COUPLE_PIN_HASH` for PIN `123456`/`112233`,
+   `SECRET_CODE=BABYLOVEIS`). Run the `wrangler secret put` commands below
+   with real values, and create the real KV namespace (wrangler.toml still
+   has placeholder `YOUR_KV_ID_HERE` / `YOUR_PREVIEW_KV_ID`).
+3. **`result.html`** — teen/adult non-winners currently just see an inline
+   neutral "thanks for playing" overlay on game-teen.html/game-adult.html
+   rather than a dedicated page; low priority since the overlay already
+   covers the UX need.
+4. Missing asset polish: lottie animations, sticker webp art, self-hosted
+   DM Sans/Fredoka One font files (only Playfair Display is self-hosted
+   today — the rest load from Google Fonts CDN, which needs connectivity
+   at the venue).
+5. Work through the **Testing Checklist** below on real devices.
 
 ---
 
@@ -380,5 +417,5 @@ Then follow with Phase 3 (kid games) in this order:
 
 ---
 
-*Last updated: Phase 1 complete — 20 files, ~5,700 lines*
-*Next session: Start Phase 2 (Admin Panel)*
+*Last updated: Phases 0–6 complete — all game/voucher/couple-finale logic built and tested*
+*Next session: Phase 7 — real video upload, real secrets, result.html, asset polish, device testing*

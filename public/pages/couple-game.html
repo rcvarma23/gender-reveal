@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0D0B1E">
+  <title>Solve the Code 🔐</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/animations.css">
+  <link rel="stylesheet" href="../css/layout.css">
+  <link rel="stylesheet" href="../css/components.css">
+
+  <style>
+    body { background: var(--navy-deepest); overflow-x: hidden; }
+    .page-inner { position: relative; z-index: 2; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1.5rem 1.25rem 3rem; gap: 1.25rem; text-align: center; }
+    .headline { font-family: var(--font-display); font-size: 1.3rem; color: var(--gold-soft); }
+    .attempt-label { font-size: .85rem; color: var(--text-muted); }
+    .timer { font-size: 1.5rem; font-weight: 700; color: var(--gold-bright); }
+    .timer.warn { animation: timerPulse 1s infinite; }
+    .slots-row { display: flex; gap: .4rem; flex-wrap: wrap; justify-content: center; max-width: 380px; }
+    .slot {
+      width: 2.6rem; height: 3.1rem; display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem; font-weight: 700; border-radius: var(--radius-md);
+      border: 1.5px dashed var(--border-subtle); color: var(--gold-soft); background: var(--navy-surface);
+      cursor: pointer;
+    }
+    .slot.filled { border-style: solid; border-color: var(--border-gold); background: var(--navy-card); }
+    .slot.locked { border-style: solid; border-color: var(--gold-warm); background: rgba(201,168,76,0.15); cursor: default; }
+    .tray-row { display: flex; gap: .4rem; flex-wrap: wrap; justify-content: center; max-width: 380px; min-height: 3.4rem; }
+    .tile {
+      width: 2.6rem; height: 2.9rem; display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; font-weight: 700; border-radius: var(--radius-md);
+      border: 1.5px solid rgba(255,255,255,.15); background: var(--navy-mid,#2a2660); color: var(--text-primary);
+      cursor: pointer;
+    }
+    .tile.used { visibility: hidden; }
+    .feedback { font-size: .9rem; color: var(--text-muted); min-height: 1.4rem; }
+    #videoSection, #genderSection, #autoCompleteSection { display: none; }
+    #revealVideo { width: 100%; max-width: 360px; border-radius: var(--radius-lg); }
+    .gender-buttons { display: flex; gap: 1rem; }
+    .gender-btn { font-size: 1.1rem; padding: 1rem 1.5rem; border-radius: var(--radius-full); border: 1.5px solid var(--border-subtle); cursor: pointer; font-family: var(--font-body); font-weight: 600; }
+    .gender-btn.girl { background: rgba(255,128,171,0.15); color: var(--pink); border-color: var(--pink); }
+    .gender-btn.boy  { background: rgba(64,196,255,0.15); color: var(--blue-reveal); border-color: var(--blue-reveal); }
+  </style>
+</head>
+<body>
+  <main class="page-inner">
+
+    <div id="puzzleSection">
+      <div class="headline">Arrange the letters in order</div>
+      <div class="attempt-label" id="attemptLabel"></div>
+      <div class="timer" id="timerLabel"></div>
+      <div class="slots-row" id="slotsRow" style="margin-top:.5rem"></div>
+      <div class="tray-row" id="trayRow" style="margin-top:1rem"></div>
+      <div class="feedback" id="feedback"></div>
+    </div>
+
+    <div id="autoCompleteSection">
+      <div class="headline">Final attempt — unlocking the code for you! ✨</div>
+      <div class="slots-row" id="autoSlotsRow" style="margin-top:1rem"></div>
+    </div>
+
+    <div id="videoSection">
+      <div class="headline">🎬 The Big Moment</div>
+      <video id="revealVideo" controls playsinline></video>
+      <div class="feedback" id="videoFallback"></div>
+      <button class="btn btn-primary" id="continueToGenderBtn" style="margin-top:1rem">We watched it — reveal the color! 🎉</button>
+    </div>
+
+    <div id="genderSection">
+      <div class="headline">What is it?! 💗💙</div>
+      <div class="subline" style="color:var(--text-muted);font-size:.85rem;max-width:280px">Pick the actual result — this is what floods every guest's screen next.</div>
+      <div class="gender-buttons" style="margin-top:1rem">
+        <button class="gender-btn girl" id="girlBtn">💗 Girl</button>
+        <button class="gender-btn boy"  id="boyBtn">💙 Boy</button>
+      </div>
+    </div>
+
+  </main>
+
+  <script type="module">
+    import API      from '../js/core/api.js';
+    import Confetti  from '../js/systems/confetti.js';
+
+    const TOKEN_KEY = 'gr_couple_token';
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) window.location.href = 'couple.html';
+
+    const puzzleSection       = document.getElementById('puzzleSection');
+    const autoCompleteSection = document.getElementById('autoCompleteSection');
+    const videoSection        = document.getElementById('videoSection');
+    const genderSection       = document.getElementById('genderSection');
+
+    let slots = [];       // { letter: string|null, locked: bool }
+    let tray  = [];        // remaining letter tiles available to place
+    let timerInterval = null;
+    let submitted = false;
+
+    const showSection = (name) => {
+      puzzleSection.style.display       = name === 'puzzle'       ? 'block' : 'none';
+      autoCompleteSection.style.display = name === 'auto'          ? 'block' : 'none';
+      videoSection.style.display        = name === 'video'         ? 'block' : 'none';
+      genderSection.style.display       = name === 'gender'        ? 'block' : 'none';
+    };
+
+    const renderSlots = () => {
+      const row = document.getElementById('slotsRow');
+      row.innerHTML = '';
+      slots.forEach((slot, i) => {
+        const el = document.createElement('div');
+        el.className = 'slot' + (slot.letter ? ' filled' : '') + (slot.locked ? ' locked' : '');
+        el.textContent = slot.letter || '';
+        if (!slot.locked) {
+          el.addEventListener('click', () => {
+            if (!slot.letter) return;
+            tray.push(slot.letter);
+            slot.letter = null;
+            renderAll();
+          });
+        }
+        row.appendChild(el);
+      });
+    };
+
+    const renderTray = () => {
+      const row = document.getElementById('trayRow');
+      row.innerHTML = '';
+      tray.forEach((letter, ti) => {
+        const el = document.createElement('div');
+        el.className = 'tile';
+        el.textContent = letter;
+        el.addEventListener('click', () => {
+          const nextSlot = slots.find(s => !s.locked && !s.letter);
+          if (!nextSlot) return;
+          nextSlot.letter = letter;
+          tray.splice(ti, 1);
+          renderAll();
+          if (slots.every(s => s.letter)) submitAttempt();
+        });
+        row.appendChild(el);
+      });
+    };
+
+    const renderAll = () => { renderSlots(); renderTray(); };
+
+    const clearTimer = () => { if (timerInterval) clearInterval(timerInterval); timerInterval = null; };
+
+    const startTimer = (durationSec) => {
+      clearTimer();
+      let remaining = durationSec;
+      const label = document.getElementById('timerLabel');
+      const update = () => {
+        label.textContent = `⏱ ${remaining}s`;
+        label.classList.toggle('warn', remaining <= 10);
+        if (remaining <= 0) {
+          clearTimer();
+          submitAttempt(); // time's up — submit whatever we have
+        }
+        remaining--;
+      };
+      update();
+      timerInterval = setInterval(update, 1000);
+    };
+
+    const setupPuzzle = (letters, hints, durationSec, attemptNumber) => {
+      submitted = false;
+      const pool = [...letters];
+      slots = letters.map((_, i) => ({ letter: null, locked: false }));
+
+      hints.forEach(({ position, letter }) => {
+        const idx = pool.indexOf(letter);
+        if (idx !== -1) pool.splice(idx, 1);
+        slots[position] = { letter, locked: true };
+      });
+
+      tray = pool.sort(() => Math.random() - 0.5);
+      document.getElementById('attemptLabel').textContent = `Attempt ${attemptNumber} of 3`;
+      document.getElementById('feedback').textContent = '';
+      renderAll();
+      startTimer(durationSec);
+      showSection('puzzle');
+    };
+
+    const submitAttempt = async () => {
+      if (submitted) return;
+      submitted = true;
+      clearTimer();
+
+      const guess = slots.map(s => s.letter || '');
+      const result = await API.couple.attempt({ guess }, token);
+
+      if (!result.success) {
+        document.getElementById('feedback').textContent = result.error || 'Something went wrong';
+        submitted = false;
+        return;
+      }
+
+      if (result.won) {
+        goToVideo();
+        return;
+      }
+
+      document.getElementById('feedback').textContent = `Not quite — ${result.attemptsRemaining} attempt(s) left. Try again!`;
+      setTimeout(() => loadStatus(), 1500);
+    };
+
+    const goToVideo = () => {
+      Confetti.burst({ palette: 'gold', count: 70 });
+      showSection('video');
+
+      const video = document.getElementById('revealVideo');
+      const src = `/api/couple/video?token=${encodeURIComponent(token)}`;
+      video.src = src;
+
+      fetch(src, { method: 'GET' }).then((res) => {
+        if (!res.ok) {
+          document.getElementById('videoFallback').textContent =
+            "No video uploaded yet — that's expected before the real party. Continue below when ready.";
+          video.style.display = 'none';
+        }
+      }).catch(() => {});
+    };
+
+    document.getElementById('continueToGenderBtn').addEventListener('click', () => {
+      showSection('gender');
+    });
+
+    const submitGender = async (gender) => {
+      const res = await fetch('/api/couple/reveal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Couple-Token': token },
+        body: JSON.stringify({ gender }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location.href = 'reveal.html';
+      }
+    };
+
+    document.getElementById('girlBtn').addEventListener('click', () => submitGender('girl'));
+    document.getElementById('boyBtn').addEventListener('click', () => submitGender('boy'));
+
+    const loadStatus = async () => {
+      const status = await API.couple.status(token);
+
+      if (!status.success) {
+        window.location.href = 'couple.html';
+        return;
+      }
+      if (!status.lettersConfirmed) {
+        window.location.href = 'couple.html';
+        return;
+      }
+      if (status.videoUnlocked) {
+        goToVideo();
+        return;
+      }
+
+      if (status.attemptInProgress === 3) {
+        // Attempt 3 always auto-completes — no need to make them play it out
+        showSection('auto');
+        const row = document.getElementById('autoSlotsRow');
+        row.innerHTML = (status.puzzleLetters || []).map(l => `<div class="slot filled">${l}</div>`).join('');
+        setTimeout(async () => {
+          const result = await API.couple.attempt({ guess: status.puzzleLetters || [] }, token);
+          if (result.won) goToVideo();
+        }, 1800);
+        return;
+      }
+
+      setupPuzzle(status.puzzleLetters || [], status.hints || [], status.durationSec || 60, status.attemptInProgress);
+    };
+
+    loadStatus();
+  </script>
+</body>
+</html>

@@ -59,7 +59,11 @@ export default {
         if (winnerData) {
           isWinner    = true;
           voucherCode = winnerData.voucherCode;
-          letter      = winnerData.letter;
+          // Don't leak the letter until the guest has actually scratched
+          // their card — winner_device_ already has it at draw time, but
+          // that would make the scratch-card mechanic meaningless.
+          const voucher = await env.GR_KV.get(`voucher_${winnerData.voucherCode}`, { type: 'json' });
+          letter = voucher && voucher.status === 'revealed' ? voucher.letter : null;
         }
       }
 

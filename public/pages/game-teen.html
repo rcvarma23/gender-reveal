@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0D0B1E">
+  <title>Teen Games 🎮</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&family=Fredoka+One&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/animations.css">
+  <link rel="stylesheet" href="../css/layout.css">
+  <link rel="stylesheet" href="../css/components.css">
+
+  <style>
+    body { background: var(--navy-deepest); overflow-x: hidden; }
+    .page-inner { position: relative; z-index: 2; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; padding: 1.5rem 1.25rem 3rem; }
+    .header-row { display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 420px; margin-bottom: 1.5rem; }
+    .picker-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .875rem; width: 100%; max-width: 420px; }
+    .game-card { background: var(--navy-surface); border: 1.5px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 1.75rem 1rem; text-align: center; cursor: pointer; transition: all var(--transition-slow); -webkit-tap-highlight-color: transparent; }
+    .game-card:hover, .game-card:focus { border-color: var(--border-gold); background: var(--navy-card); transform: translateY(-3px); outline: none; }
+    .game-card .card-emoji { font-size: 3rem; display: block; margin-bottom: .5rem; }
+    .game-card .card-name  { font-size: 1rem; font-weight: 600; color: var(--gold-soft); }
+    #gameStage { display: none; width: 100%; max-width: 420px; height: 60vh; background: var(--navy-surface); border-radius: var(--radius-lg); border: 1.5px solid var(--border-subtle); position: relative; overflow: hidden; }
+    .reveal-overlay { position: fixed; inset: 0; z-index: 9999; display: none; align-items: center; justify-content: center; background: rgba(8,7,23,.92); text-align: center; padding: 1.5rem; }
+    .reveal-overlay.visible { display: flex; }
+    .reveal-card { display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+    .reveal-emoji { font-size: 5rem; }
+    .reveal-name  { font-family: var(--font-display); font-size: 1.3rem; color: var(--gold-soft); max-width: 300px; }
+    .reveal-sub   { font-size: .85rem; color: var(--text-muted); max-width: 280px; }
+    .back-btn {
+      display: flex; align-items: center; gap: .4rem;
+      background: transparent; border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-full); padding: .45rem 1rem;
+      color: var(--text-muted); font-size: .8rem; cursor: pointer;
+      transition: all var(--transition-base); font-family: var(--font-body);
+    }
+    .back-btn:hover { border-color: var(--border-gold); color: var(--gold-soft); }
+    .already-played { display:flex; flex-direction:column; align-items:center; gap:1rem; text-align:center; padding: 3rem 1.5rem; max-width: 320px; }
+  </style>
+</head>
+<body>
+  <main class="page-inner">
+    <div class="header-row">
+      <button class="back-btn" onclick="window.location.href='play.html'">← Back</button>
+      <span class="badge badge-gold">🎟️ One turn only</span>
+    </div>
+
+    <div class="picker-grid" id="pickerGrid">
+      <div class="game-card" data-game="baby-trivia" tabindex="0" onclick="playGame('baby-trivia')">
+        <span class="card-emoji">🧠</span>
+        <span class="card-name">Baby Trivia</span>
+      </div>
+      <div class="game-card" data-game="baby-scramble-hard" tabindex="0" onclick="playGame('baby-scramble-hard')">
+        <span class="card-emoji">🔤</span>
+        <span class="card-name">Word Scramble</span>
+      </div>
+    </div>
+
+    <div id="gameStage"></div>
+
+    <div class="already-played" id="alreadyPlayed" style="display:none">
+      <div style="font-size:3rem">🎟️</div>
+      <h2 style="font-family:var(--font-display);color:var(--gold-soft);font-size:1.2rem">Already played your turn!</h2>
+      <p style="color:var(--text-muted);font-size:.9rem">Winners will be announced later — thanks for playing!</p>
+    </div>
+  </main>
+
+  <div class="reveal-overlay" id="revealOverlay">
+    <div class="reveal-card">
+      <div class="reveal-emoji">🎉</div>
+      <div class="reveal-name">Thanks for playing!</div>
+      <div class="reveal-sub">Secret voucher winners will be revealed later tonight — good luck!</div>
+      <button class="btn btn-secondary" id="doneBtn">Done</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import Trivia          from '../js/games/trivia.js';
+    import BabyScramble    from '../js/games/baby-scramble.js';
+    import SessionManager  from '../js/core/session.js';
+    import DeviceManager   from '../js/core/device.js';
+    import TabGuard        from '../js/systems/tab-guard.js';
+    import API             from '../js/core/api.js';
+    import PartyState      from '../js/core/state.js';
+    import GAME_CONFIG      from '../../config/game-config.js';
+
+    const GAMES = { 'baby-trivia': Trivia, 'baby-scramble-hard': BabyScramble };
+
+    let currentGame = null;
+
+    const session = SessionManager.getCurrentSession();
+    if (!session || session.ageGroup !== 'teen') {
+      window.location.href = 'play.html';
+    }
+
+    TabGuard.init(DeviceManager.getDeviceId());
+    TabGuard.announceGameStart();
+
+    PartyState.startPolling((state) => {
+      if (state === 'waiting')  window.location.href = 'index.html';
+      if (state === 'revealed') window.location.href = 'reveal.html';
+    });
+
+    // One turn only — if this session already finished, don't allow another game
+    if (session && SessionManager.isSessionLocked(session)) {
+      document.getElementById('pickerGrid').style.display = 'none';
+      document.getElementById('alreadyPlayed').style.display = 'flex';
+    }
+
+    window.playGame = (gameType) => {
+      document.getElementById('pickerGrid').style.display = 'none';
+      const stage = document.getElementById('gameStage');
+      stage.style.display = 'block';
+      stage.innerHTML = '';
+
+      const config = GAME_CONFIG.teen[gameType];
+      currentGame = GAMES[gameType](stage, config, {
+        onProgress: (pct) => SessionManager.updateSession({ gameProgress: pct }),
+        onComplete: (score) => onGameComplete(gameType, score),
+      });
+      currentGame.start();
+    };
+
+    const onGameComplete = async (gameType, score) => {
+      TabGuard.announceGameComplete();
+      SessionManager.recordCompletion();
+      SessionManager.lockSession({ score, gameType });
+
+      await API.session.complete(session.sessionId, {
+        score, gameType, startedAt: session.startedAt,
+        tabFarming: TabGuard.isFarming,
+      });
+
+      document.getElementById('gameStage').style.display = 'none';
+      document.getElementById('revealOverlay').classList.add('visible');
+    };
+
+    document.getElementById('doneBtn').addEventListener('click', () => {
+      window.location.href = 'play.html';
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0D0B1E">
+  <title>It's Time! 🎉</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/animations.css">
+  <link rel="stylesheet" href="../css/layout.css">
+  <link rel="stylesheet" href="../css/components.css">
+
+  <style>
+    body { overflow-x: hidden; transition: background 1.2s ease; }
+    body.girl { background: radial-gradient(circle at 50% 30%, var(--pink-deep), var(--navy-deepest) 75%); }
+    body.boy  { background: radial-gradient(circle at 50% 30%, var(--blue-reveal), var(--navy-deepest) 75%); }
+    .page-inner {
+      position: relative; z-index: 2; min-height: 100dvh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 1.5rem 1.25rem 3rem; gap: 1.25rem; text-align: center;
+      animation: screenFlood 1s ease both;
+    }
+    .big-text { font-family: var(--font-display); font-weight: 900; font-size: clamp(2.5rem, 12vw, 4.5rem); }
+    .big-text.girl { color: var(--pink); }
+    .big-text.boy  { color: var(--blue-reveal); }
+    .sub-text { font-size: 1rem; color: var(--text-primary); opacity: .9; }
+    .sticker-toast { font-size: .85rem; color: var(--gold-soft); margin-top: .5rem; }
+  </style>
+</head>
+<body>
+  <main class="page-inner">
+    <div class="big-text" id="bigText">🎉</div>
+    <div class="sub-text" id="subText">Congratulations to the family!</div>
+    <div class="sticker-toast" id="stickerToast"></div>
+    <a class="btn btn-secondary" id="stickerBookLink" href="sticker-book.html" style="display:none;text-decoration:none">🎀 See Your Special Sticker</a>
+  </main>
+
+  <script type="module">
+    import DeviceManager    from '../js/core/device.js';
+    import SessionManager   from '../js/core/session.js';
+    import API              from '../js/core/api.js';
+    import Confetti          from '../js/systems/confetti.js';
+
+    const init = async () => {
+      let gender = sessionStorage.getItem('gr_gender');
+
+      if (!gender) {
+        const res = await fetch('/api/party-state', {
+          headers: { 'X-Device-Id': DeviceManager.getDeviceId() },
+        }).then(r => r.json()).catch(() => null);
+        gender = res?.gender || null;
+      }
+
+      if (!gender) {
+        // Nothing to show yet — bounce back to the waiting screen
+        window.location.href = 'index.html';
+        return;
+      }
+
+      document.body.classList.add(gender === 'girl' ? 'girl' : 'boy');
+      document.getElementById('bigText').classList.add(gender === 'girl' ? 'girl' : 'boy');
+      document.getElementById('bigText').textContent = gender === 'girl' ? "IT'S A GIRL!" : "IT'S A BOY!";
+
+      Confetti.cannon({ palette: gender === 'girl' ? 'pink' : 'blue' });
+      setTimeout(() => Confetti.cannon({ palette: gender === 'girl' ? 'pink' : 'blue' }), 900);
+
+      if (SessionManager.kidPlayedOnDevice()) {
+        const result = await API.stickers.unlockReveal();
+        if (result.success) {
+          document.getElementById('stickerToast').textContent = '🎀 A special sticker just unlocked!';
+          document.getElementById('stickerBookLink').style.display = 'inline-flex';
+        }
+      }
+    };
+
+    init();
+  </script>
+</body>
+</html>

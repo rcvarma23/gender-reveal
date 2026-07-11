@@ -10,6 +10,7 @@ const STICKER_CATALOG = [
   { id: 'balloon',   emoji: '🎈', name: 'Happy Balloon',   rarity: 'common',    weight: 22,  games: ['balloon-pop', 'feed-baby', 'emoji-match', 'baby-scramble'], color: '#E57373' },
   { id: 'bottle',    emoji: '🍼', name: 'Baby Bottle',     rarity: 'common',    weight: 20,  games: ['feed-baby', 'emoji-match'],                                  color: '#90CAF9' },
   { id: 'star',      emoji: '⭐', name: 'Shining Star',    rarity: 'common',    weight: 18,  games: ['all'],                                                        color: '#FFD700' },
+  { id: 'teddy',     emoji: '🧸', name: 'Cuddly Teddy',    rarity: 'common',    weight: 14,  games: ['all'],                                                        color: '#A1887F' },
   { id: 'butterfly', emoji: '🦋', name: 'Flutter By',      rarity: 'uncommon',  weight: 10,  games: ['emoji-match', 'baby-scramble'],                              color: '#CE93D8' },
   { id: 'rainbow',   emoji: '🌈', name: 'Rainbow Baby',    rarity: 'uncommon',  weight: 8,   games: ['all'],                                                        color: '#FF8A65' },
   { id: 'duck',      emoji: '🐥', name: 'Rubber Ducky',    rarity: 'uncommon',  weight: 6,   games: ['feed-baby', 'emoji-match'],                                  color: '#FFF176' },

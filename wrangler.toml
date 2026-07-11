@@ -1,11 +1,13 @@
 name = "gender-reveal"
-main = "workers/party-state.js"
+main = "workers/index.js"
 compatibility_date = "2024-04-01"
 compatibility_flags = ["nodejs_compat"]
 
-# ── PAGES ──────────────────────────────────────────────────────
-[site]
-bucket = "./public"
+# ── STATIC ASSETS ────────────────────────────────────────────────
+# Served automatically for matching files; falls through to the Worker
+# (workers/index.js) for everything else, i.e. all /api/* routes.
+[assets]
+directory = "./public"
 
 # ── KV NAMESPACES ──────────────────────────────────────────────
 [[kv_namespaces]]
@@ -27,30 +29,10 @@ PARTY_LOCATION   = "Atlanta, GA"
 TOTAL_VOUCHERS   = "10"
 LETTERS_NEEDED   = "7"
 
-# ── ROUTES ─────────────────────────────────────────────────────
-[[routes]]
-pattern = "*/api/party-state"
-script  = "workers/party-state.js"
-
-[[routes]]
-pattern = "*/api/session/*"
-script  = "workers/session-manager.js"
-
-[[routes]]
-pattern = "*/api/voucher/*"
-script  = "workers/voucher-engine.js"
-
-[[routes]]
-pattern = "*/api/sticker/*"
-script  = "workers/sticker-system.js"
-
-[[routes]]
-pattern = "*/api/admin/*"
-script  = "workers/admin-controls.js"
-
-[[routes]]
-pattern = "*/api/couple/*"
-script  = "workers/couple-game.js"
+# NOTE: routing across the six API modules happens inside
+# workers/index.js (a single Worker script), not via [[routes]] —
+# that field routes a whole zone to different Worker *services*,
+# it can't point sub-paths of one project at separate script files.
 
 # ── DEPLOY COMMAND ──────────────────────────────────────────────
 # npx wrangler deploy

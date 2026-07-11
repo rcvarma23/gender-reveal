@@ -1,15 +1,14 @@
 /**
  * PHASE 0 — CONFIG: Sticker Catalog
  * All 13 stickers — 12 earnable + 1 secret reveal sticker
- * Weights are used for weighted random selection
+ * Weights are used for weighted random selection (relative, not required to sum to 100)
  */
 
 const STICKER_CATALOG = {
 
-  // Total weight = 100 (for easy % calculation)
   stickers: [
 
-    // ─── COMMON (total weight: 60) ─────────────────────────
+    // ─── COMMON (total weight: 74) ─────────────────────────
     {
       id:          'balloon',
       emoji:       '🎈',
@@ -39,6 +38,16 @@ const STICKER_CATALOG = {
       weight:      18,
       games:       ['all'],
       color:       '#FFD700',
+    },
+    {
+      id:          'teddy',
+      emoji:       '🧸',
+      name:        'Cuddly Teddy',
+      description: 'Squishy and huggable, just like baby!',
+      rarity:      'common',
+      weight:      14,
+      games:       ['all'],
+      color:       '#A1887F',
     },
 
     // ─── UNCOMMON (total weight: 28) ───────────────────────

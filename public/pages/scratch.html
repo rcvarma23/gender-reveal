@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0D0B1E">
+  <title>Scratch Your Card 🎟️</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&family=Fredoka+One&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/animations.css">
+  <link rel="stylesheet" href="../css/layout.css">
+  <link rel="stylesheet" href="../css/components.css">
+
+  <style>
+    body { background: var(--navy-deepest); overflow-x: hidden; }
+    .page-inner {
+      position: relative; z-index: 2; min-height: 100dvh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 1.5rem 1.25rem 3rem; gap: 1.5rem; text-align: center;
+    }
+    .headline { font-family: var(--font-display); font-size: 1.4rem; color: var(--gold-soft); max-width: 320px; }
+    .subline  { font-size: .9rem; color: var(--text-muted); max-width: 300px; }
+    .scratch-card-wrap { animation: cardDrop .6s cubic-bezier(0.34,1.56,0.64,1) both; }
+    #continueBtn { display: none; }
+  </style>
+</head>
+<body>
+  <main class="page-inner">
+    <div class="headline" id="headline">You won a secret letter! 🎉</div>
+    <div class="subline" id="subline">Scratch the card below with your finger to reveal it.</div>
+
+    <div class="scratch-card-wrap" id="cardWrap" style="display:none">
+      <div class="scratch-letter">
+        <span class="scratch-letter-text" id="letterText">?</span>
+      </div>
+      <canvas class="scratch-canvas" id="scratchCanvas"></canvas>
+    </div>
+
+    <button class="btn btn-primary" id="continueBtn">See Your Letter →</button>
+  </main>
+
+  <script type="module">
+    import SessionManager from '../js/core/session.js';
+    import API            from '../js/core/api.js';
+    import PartyState      from '../js/core/state.js';
+    import Confetti        from '../js/systems/confetti.js';
+    import ScratchCard      from '../js/systems/scratch-card.js';
+
+    const session = SessionManager.getCurrentSession();
+
+    const headline = document.getElementById('headline');
+    const subline  = document.getElementById('subline');
+    const cardWrap = document.getElementById('cardWrap');
+    const letterText = document.getElementById('letterText');
+    const continueBtn = document.getElementById('continueBtn');
+
+    PartyState.startPolling((state) => {
+      if (state === 'waiting') window.location.href = 'index.html';
+    });
+
+    const showError = (message) => {
+      headline.textContent = message;
+      subline.textContent = '';
+      setTimeout(() => { window.location.href = 'play.html'; }, 2500);
+    };
+
+    const init = async () => {
+      const result = await API.voucher.request(session?.sessionId);
+
+      if (!result.success || !result.hasVoucher) {
+        showError("Looks like there's no voucher waiting here.");
+        return;
+      }
+
+      if (result.status === 'revealed') {
+        // Already scratched previously — nothing to do, go see the letter
+        SessionManager.updateSession({
+          voucherCode: result.voucherCode, letter: result.letter, letterRevealed: true,
+        });
+        window.location.href = 'letter.html';
+        return;
+      }
+
+      cardWrap.style.display = 'block';
+
+      const canvas = document.getElementById('scratchCanvas');
+      ScratchCard.init(canvas, {
+        thresholdPct: 55,
+        onThreshold: () => onScratchedThrough(result.voucherCode),
+      });
+    };
+
+    const onScratchedThrough = async (voucherCode) => {
+      const result = await API.voucher.scratch(voucherCode);
+      if (!result.success) {
+        showError('Something went wrong revealing your letter.');
+        return;
+      }
+
+      letterText.textContent = result.letter;
+      Confetti.burst({ palette: 'gold' });
+
+      SessionManager.updateSession({
+        voucherCode: result.voucherCode, letter: result.letter, letterRevealed: true,
+      });
+
+      headline.textContent = 'You found a letter!';
+      subline.textContent = 'Show this to the parents-to-be so it can join the secret code.';
+      continueBtn.style.display = 'inline-flex';
+    };
+
+    continueBtn.addEventListener('click', () => {
+      window.location.href = 'letter.html';
+    });
+
+    init();
+  </script>
+</body>
+</html>

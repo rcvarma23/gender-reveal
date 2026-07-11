@@ -169,12 +169,15 @@ export default {
       let voucherEligible    = false;
       let disqualifyReason   = null;
 
+      // Kid-first gate is an ADULT-only rule (see CLAUDE.md guest table —
+      // only Adult lists "kid-first gate"; Teen does not), so teens must
+      // not be blocked by it.
       if (!isKid) {
         if (tooFast) {
           disqualifyReason = 'speed';
         } else if (farmed) {
           disqualifyReason = 'tab_farming';
-        } else if (!deviceData?.kidPlayedFirst) {
+        } else if (sessionData.ageGroup === 'adult' && !deviceData?.kidPlayedFirst) {
           disqualifyReason = 'no_kid_first';
         } else {
           voucherEligible = true;
@@ -197,11 +200,16 @@ export default {
       };
       await env.GR_KV.put(`session_${sessionId}`, JSON.stringify(completed));
 
-      // Update device: mark kid played, update last completion time
+      // Update device: mark kid played, update last completion time.
+      // Cooldowns only apply to adult/teen (COOLDOWNS.kid/toddler = 0), so
+      // only they should set lastCompletionAt — otherwise a kid finishing
+      // their turn would immediately cooldown-block the very next adult
+      // attempt on the same phone, breaking the kid-first-then-adult flow.
       if (isKid) {
         deviceData.kidPlayedFirst = true;
+      } else {
+        deviceData.lastCompletionAt = Date.now();
       }
-      deviceData.lastCompletionAt = Date.now();
       await env.GR_KV.put(`device_${deviceId}`, JSON.stringify(deviceData));
 
       // Update completed games counter
