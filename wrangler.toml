@@ -1,4 +1,4 @@
-name = "gender-reveal"
+name = "gender-reveal-byrc"
 main = "workers/index.js"
 compatibility_date = "2024-04-01"
 compatibility_flags = ["nodejs_compat"]
@@ -53,7 +53,7 @@ LETTERS_NEEDED   = "7"
 #   wrangler secret put COUPLE_PIN_HASH --env dev
 #   wrangler secret put SECRET_CODE --env dev
 [env.dev]
-name = "gender-reveal-dev"
+name = "gender-reveal-dev-byrc"
 
 [[env.dev.kv_namespaces]]
 binding = "GR_KV"
