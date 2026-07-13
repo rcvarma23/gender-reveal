@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0D0B1E">
+  <title>Thanks for Playing 🎉</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/animations.css">
+  <link rel="stylesheet" href="../css/layout.css">
+  <link rel="stylesheet" href="../css/components.css">
+
+  <style>
+    body { background: var(--navy-deepest); overflow-x: hidden; }
+    .page-inner {
+      position: relative; z-index: 2; min-height: 100dvh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 1.5rem 1.25rem 3rem; text-align: center;
+    }
+    .result-emoji { font-size: 4.5rem; margin-bottom: 1rem; }
+    .result-name  { font-family: var(--font-display); font-size: 1.4rem; color: var(--gold-soft); margin-bottom: .5rem; }
+    .result-sub   { font-size: .9rem; color: var(--text-muted); max-width: 320px; margin-bottom: 1.75rem; }
+    .result-score {
+      display: inline-flex; align-items: center; gap: .5rem;
+      background: var(--navy-surface); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-full); padding: .5rem 1.25rem;
+      font-size: .85rem; color: var(--text-secondary); margin-bottom: 2rem;
+    }
+    .result-score strong { color: var(--gold-soft); }
+  </style>
+</head>
+<body>
+  <main class="page-inner">
+    <div class="result-emoji">🎉</div>
+    <div class="result-name" id="resultName">Thanks for playing!</div>
+    <div class="result-sub" id="resultSub">Secret voucher winners will be revealed later tonight — good luck!</div>
+    <div class="result-score" id="resultScore" style="display:none">
+      Your score: <strong id="resultScoreValue">0</strong>
+    </div>
+    <button class="btn btn-primary" id="backBtn">Back to Games</button>
+  </main>
+
+  <script type="module">
+    import SessionManager from '../js/core/session.js';
+    import PartyState      from '../js/core/state.js';
+    import createLogger    from '../js/core/logger.js';
+
+    const log = createLogger('Result');
+
+    PartyState.startPolling((state) => {
+      if (state === 'waiting')  window.location.href = 'index.html';
+      if (state === 'revealed') window.location.href = 'reveal.html';
+    });
+
+    const session = SessionManager.getCurrentSession();
+    log.debug('Loaded session for result page', session);
+
+    // Sessions that still have an unrevealed voucher belong on
+    // scratch.html/letter.html, not here — send them to the right place
+    // instead of showing a stale "thanks for playing" recap.
+    if (session?.letterRevealed) {
+      window.location.href = 'letter.html';
+    } else if (session?.voucherCode) {
+      window.location.href = 'scratch.html';
+    } else if (session?.score) {
+      document.getElementById('resultScore').style.display = 'inline-flex';
+      document.getElementById('resultScoreValue').textContent = session.score;
+    }
+
+    if (!session) {
+      document.getElementById('resultName').textContent = 'No recent game found';
+      document.getElementById('resultSub').textContent = 'Head back and pick your age group to play!';
+    }
+
+    document.getElementById('backBtn').addEventListener('click', () => {
+      window.location.href = 'play.html';
+    });
+  </script>
+</body>
+</html>

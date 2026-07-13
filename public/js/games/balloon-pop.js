@@ -18,6 +18,17 @@ export default function createGame(container, config, callbacks) {
   stageEl.style.cssText = 'position:relative;width:100%;height:100%;overflow:hidden;';
   container.appendChild(stageEl);
 
+  const countEl = document.createElement('div');
+  countEl.style.cssText = `
+    position:absolute; top:.5rem; left:50%; transform:translateX(-50%); z-index:2;
+    font-family: var(--font-display, serif); font-size:1.1rem; font-weight:700;
+    color: var(--gold-soft, #C9A84C); background: rgba(8,7,23,.55);
+    padding:.3rem .9rem; border-radius: var(--radius-full, 999px);
+  `;
+  const updateCount = () => { countEl.textContent = `🎈 ${popped} popped!`; };
+  updateCount();
+  stageEl.appendChild(countEl);
+
   const spawnBalloon = () => {
     if (ended) return;
     const el = document.createElement('button');
@@ -48,8 +59,11 @@ export default function createGame(container, config, callbacks) {
       if (ended) return;
       popped++;
       cleanup();
+      updateCount();
       callbacks.onProgress(Math.min(100, Math.round((popped / config.balloonsToWin) * 100)));
-      if (popped >= config.balloonsToWin) finish();
+      // Never end the game before minPlaySec, even if the pop target is
+      // already hit — the kid should get to keep popping balloons.
+      if (popped >= config.balloonsToWin && elapsed >= (config.minPlaySec || 0)) finish();
     });
   };
 

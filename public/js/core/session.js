@@ -6,6 +6,9 @@
  */
 
 import DeviceManager from './device.js';
+import createLogger  from './logger.js';
+
+const log = createLogger('SessionManager');
 
 const SessionManager = (() => {
 
@@ -48,6 +51,8 @@ const SessionManager = (() => {
       timerStart:   null,
       snapshotAt:   null,
     };
+
+    log.info('Creating session', { sessionId, ageGroup });
 
     // Save locally
     localStorage.setItem(CURRENT_SESSION_KEY, sessionId);
@@ -242,19 +247,26 @@ const SessionManager = (() => {
     const cooldown = COOLDOWNS[ageGroup] || 0;
     if (!cooldown) return 0;
 
-    const deviceData       = DeviceManager.getLocalDeviceData();
-    const lastCompletion   = deviceData.lastCompletionAt;
+    const deviceData     = DeviceManager.getLocalDeviceData();
+    // Each age group has its own cooldown clock — an adult's play must
+    // never cooldown-block a teen's turn (or vice versa) on a shared phone.
+    const lastCompletion = deviceData.lastCompletionByGroup?.[ageGroup];
     if (!lastCompletion) return 0;
 
     const elapsed  = Date.now() - lastCompletion;
     const remaining = cooldown - elapsed;
+    log.debug('Cooldown check', { ageGroup, lastCompletion, elapsed, remaining: Math.max(0, remaining) });
     return Math.max(0, remaining);
   };
 
   const isOnCooldown = (ageGroup) => getCooldownRemaining(ageGroup) > 0;
 
-  const recordCompletion = () => {
-    DeviceManager.updateLocalDeviceData({ lastCompletionAt: Date.now() });
+  const recordCompletion = (ageGroup) => {
+    log.info('Recording completion timestamp for cooldown clock', ageGroup);
+    const deviceData = DeviceManager.getLocalDeviceData();
+    DeviceManager.updateLocalDeviceData({
+      lastCompletionByGroup: { ...(deviceData.lastCompletionByGroup || {}), [ageGroup]: Date.now() },
+    });
   };
 
   // ─── TAB GUARD ─────────────────────────────────────────────

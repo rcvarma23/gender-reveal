@@ -17,7 +17,7 @@
 
 const COOLDOWNS = {
   adult:   3 * 60 * 1000,
-  teen:    5 * 60 * 1000,
+  teen:    2.5 * 60 * 1000,
   kid:     0,
   toddler: 0,
 };
@@ -77,17 +77,23 @@ export default {
         totalSessions:    0,
         vouchersIssued:   0,
         kidPlayedFirst:   false,
-        lastCompletionAt: null,
+        // Cooldown clock per age group — adult and teen are independent
+        // people on a shared phone with different cooldown durations, so
+        // one flat timestamp would let an adult's play cooldown-block a
+        // teen (or vice versa) using the wrong duration.
+        lastCompletionByGroup: {},
         sessions:         [],
         flagged:          false,
       };
 
       // ── ANTI-CHEAT: Cooldown check ───────────────────────
       const cooldown = COOLDOWNS[ageGroup] || 0;
-      if (cooldown && deviceData.lastCompletionAt) {
-        const elapsed   = Date.now() - deviceData.lastCompletionAt;
+      const lastCompletionForGroup = deviceData.lastCompletionByGroup?.[ageGroup];
+      if (cooldown && lastCompletionForGroup) {
+        const elapsed   = Date.now() - lastCompletionForGroup;
         const remaining = cooldown - elapsed;
         if (remaining > 0) {
+          console.log(`[SessionManager] cooldown block device=${deviceId} ageGroup=${ageGroup} remainingSec=${Math.ceil(remaining / 1000)}`);
           return json({
             success:   false,
             reason:    'cooldown',
@@ -199,16 +205,22 @@ export default {
         tabFarmed:          farmed,
       };
       await env.GR_KV.put(`session_${sessionId}`, JSON.stringify(completed));
+      console.log(`[SessionManager] session complete id=${sessionId} ageGroup=${sessionData.ageGroup} voucherEligible=${voucherEligible} disqualifyReason=${disqualifyReason || 'none'}`);
 
       // Update device: mark kid played, update last completion time.
       // Cooldowns only apply to adult/teen (COOLDOWNS.kid/toddler = 0), so
-      // only they should set lastCompletionAt — otherwise a kid finishing
-      // their turn would immediately cooldown-block the very next adult
-      // attempt on the same phone, breaking the kid-first-then-adult flow.
+      // only they should set a cooldown timestamp — otherwise a kid
+      // finishing their turn would immediately cooldown-block the very
+      // next adult attempt on the same phone, breaking the kid-first-then-
+      // adult flow. The timestamp is keyed by ageGroup so an adult's play
+      // never cooldown-blocks a teen (or vice versa) on the same device.
       if (isKid) {
         deviceData.kidPlayedFirst = true;
       } else {
-        deviceData.lastCompletionAt = Date.now();
+        deviceData.lastCompletionByGroup = {
+          ...(deviceData.lastCompletionByGroup || {}),
+          [sessionData.ageGroup]: Date.now(),
+        };
       }
       await env.GR_KV.put(`device_${deviceId}`, JSON.stringify(deviceData));
 

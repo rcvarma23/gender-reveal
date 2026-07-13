@@ -71,6 +71,7 @@ export default {
         voucherCode: voucher.code,
         status:      voucher.status,                                  // 'pending' | 'revealed'
         letter:      voucher.status === 'revealed' ? voucher.letter : null,
+        position:    voucher.position,
       });
     }
 
@@ -106,12 +107,13 @@ export default {
             sessionData.voucherCode    = voucher.code;
             sessionData.letterRevealed = true;
             sessionData.letter         = voucher.letter;
+            sessionData.letterPosition = voucher.position;
             await env.GR_KV.put(`session_${voucher.sessionId}`, JSON.stringify(sessionData));
           }
         }
       }
 
-      return json({ success: true, voucherCode, letter: voucher.letter });
+      return json({ success: true, voucherCode, letter: voucher.letter, position: voucher.position });
     }
 
     // ── GET /api/voucher/status/:code ────────────────────────
@@ -121,10 +123,11 @@ export default {
       if (!voucher) return json({ success: true, exists: false });
 
       return json({
-        success: true,
-        exists:  true,
-        status:  voucher.status,
-        letter:  voucher.status === 'revealed' ? voucher.letter : null,
+        success:  true,
+        exists:   true,
+        status:   voucher.status,
+        letter:   voucher.status === 'revealed' ? voucher.letter : null,
+        position: voucher.position,
       });
     }
 

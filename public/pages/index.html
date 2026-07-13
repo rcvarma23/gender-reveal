@@ -76,6 +76,53 @@
       animation:  float-slow 10s ease-in-out infinite reverse;
     }
 
+    /* ── TEASER BLOCK ──────────────────────────────────────── */
+    /* Stacking order: "Boy or Girl?" (straight, centered) →
+       curved "...New Rival Arrives!" banner → event date, all above
+       the location badge and central orb. */
+    .teaser-block {
+      display:         flex;
+      flex-direction:  column;
+      align-items:     center;
+      gap:             var(--sp-xs, 0.35rem);
+    }
+
+    .teaser-title {
+      font-family:    var(--font-display);
+      font-size:      clamp(1.3rem, 4.75vw, 1.75rem);
+      font-weight:    900;
+      color:          var(--gold-bright);
+      text-shadow:    0 0 20px rgba(255,215,0,0.3);
+      margin:         0;
+    }
+
+    /* Shallow arc — radius is large relative to the chord width so the
+       text bows only slightly (a "smile" banner), not a near-semicircle
+       that balloons outside its own box and overlaps neighbouring text. */
+    .curved-teaser {
+      width:  min(420px, 96vw);
+      height: 60px;
+      overflow: visible;
+    }
+    .curved-teaser text {
+      font-family:    var(--font-display);
+      font-weight:    700;
+      font-size:      13px;
+      letter-spacing: 0.02em;
+      fill:           var(--gold-soft);
+    }
+
+    /* Sized to match the Atlanta, GA badge just below it (--text-sm) */
+    .event-date {
+      font-family:    var(--font-display);
+      font-size:      var(--text-sm);
+      font-weight:    700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color:          var(--gold-bright);
+      text-shadow:    0 0 20px rgba(255,215,0,0.35);
+    }
+
     /* ── HEADER ────────────────────────────────────────────── */
     .header-badge {
       display:       flex;
@@ -269,12 +316,26 @@
   <!-- Main waiting screen -->
   <main class="waiting-page" id="waitingScreen">
 
+    <!-- Teaser: straight headline, curved sub-line, then date -->
+    <div class="teaser-block anim-fade-in">
+      <h2 class="teaser-title">Boy or Girl?</h2>
+
+      <svg class="curved-teaser" viewBox="0 0 420 60" aria-hidden="true">
+        <path id="teaserArc" d="M 15,50 A 700,700 0 0 1 405,50" fill="none" />
+        <text>
+          <textPath href="#teaserArc" startOffset="50%" text-anchor="middle">
+            Dhruhan &amp; Shreyan are Leveling Up to Big Brothers...
+          </textPath>
+        </text>
+      </svg>
+
+      <div class="event-date" id="partyDate">25th July 2026</div>
+    </div>
+
     <!-- Top badge -->
     <div class="header-badge anim-fade-in">
       <span>🎀</span>
       <span id="partyLocation">Atlanta, GA</span>
-      <span>·</span>
-      <span id="partyDate">2024</span>
     </div>
 
     <!-- Central glowing orb -->
@@ -287,7 +348,7 @@
 
     <!-- Hero text -->
     <div class="hero-text">
-      <p class="hero-eyebrow anim-slide-up">A new star is arriving</p>
+      <p class="hero-eyebrow anim-slide-up">Satish &amp; Sanjana's Family - A new star is arriving</p>
       <h1 class="hero-title shimmer-text anim-slide-up">
         Baby Reveal<br>is Coming
       </h1>
@@ -335,25 +396,49 @@
   <script type="module">
     import PartyState from '../js/core/state.js';
     import DeviceManager from '../js/core/device.js';
+    import PARTY_CONFIG from '../config/party-config.js';
+
+    // ─── EVENT DETAILS ──────────────────────────────────────
+
+    const formatEventDate = (isoDate) => {
+      const [y, m, d] = isoDate.split('-').map(Number);
+      const date = new Date(y, m - 1, d);
+      const day  = date.getDate();
+      const ord  = (n) => {
+        if (n % 10 === 1 && n % 100 !== 11) return 'st';
+        if (n % 10 === 2 && n % 100 !== 12) return 'nd';
+        if (n % 10 === 3 && n % 100 !== 13) return 'rd';
+        return 'th';
+      };
+      const month = date.toLocaleString('en-US', { month: 'long' }).toUpperCase();
+      return `${day}${ord(day)} ${month} ${date.getFullYear()}`;
+    };
+
+    const renderEventDetails = () => {
+      document.getElementById('partyDate').textContent     = formatEventDate(PARTY_CONFIG.partyDate);
+      document.getElementById('partyLocation').textContent = PARTY_CONFIG.partyLocation;
+    };
 
     // ─── INIT ───────────────────────────────────────────────
 
     const init = async () => {
+      renderEventDetails();
       // Initialise device (creates ID + fingerprint silently)
       const deviceInfo = await DeviceManager.getDeviceInfo();
 
-      // Check cached state for instant render — no flash
+      // Check cached state for instant render — no flash. Never hard-navigate
+      // off a cached value directly though: a stale 'revealed' cache from
+      // before an admin reset must wait for the first real poll (which checks
+      // resetEpoch) before we act on it — otherwise a reset tab would redirect
+      // straight back to reveal.html.
       const cached = PartyState.restoreFromCache();
       if (cached === 'active' || cached === 'finale') {
         handleStateChange('active');
-        return;
-      }
-      if (cached === 'revealed') {
-        window.location.href = 'reveal.html';
-        return;
       }
 
-      // Start polling — guests check every 10 seconds
+      // Start polling — guests check every 10 seconds. The first poll always
+      // fires handleStateChange (see hasPolledServer in state.js), so a reset
+      // or a genuine still-revealed state gets resolved correctly here.
       PartyState.startPolling(handleStateChange);
 
       // Start starfield

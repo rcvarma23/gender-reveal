@@ -6,6 +6,9 @@
  */
 
 import DeviceManager from './device.js';
+import createLogger  from './logger.js';
+
+const log = createLogger('PartyState');
 
 const PartyState = (() => {
 
@@ -23,6 +26,7 @@ const PartyState = (() => {
   let lastKnownState      = null;
   let stateChangeHandlers = {};
   let genderRevealed      = null;   // 'girl' | 'boy' | null
+  let hasPolledServer     = false;  // becomes true after the first real server poll
 
   // ─── POLLING ───────────────────────────────────────────────
 
@@ -61,25 +65,70 @@ const PartyState = (() => {
         signal:  AbortSignal.timeout(5000),
       });
 
-      if (!response.ok) return;
+      if (!response.ok) { log.warn('Poll returned non-OK status', response.status); return; }
 
       const data = await response.json();
+      log.debug('Poll response', data);
+      handleResetEpoch(data);
       handleStateUpdate(data);
 
     } catch (err) {
       // Network error — keep showing current state silently
-      console.warn('[PartyState] Poll failed:', err.message);
+      log.warn('Poll failed:', err.message);
+    }
+  };
+
+  // ─── RESET DETECTION ─────────────────────────────────────────
+
+  const RESET_EPOCH_KEY = 'gr_reset_epoch';
+
+  /**
+   * Admin's "reset party" bumps a server-side epoch timestamp. When a
+   * guest's poll sees a newer epoch than the one it last saw, the party
+   * was reset server-side — wipe this device's local session/cooldown
+   * cache too, instead of leaving stale data until the guest manually
+   * closes their browser.
+   */
+  const handleResetEpoch = (data) => {
+    if (!data.resetEpoch || data.resetEpoch === '0') return;
+    const seen = localStorage.getItem(RESET_EPOCH_KEY);
+
+    // Deliberately no "first time seen, just record it" bypass — a device
+    // that already has stale session/voucher/cooldown data from BEFORE
+    // it ever polled (e.g. it played, then the party was reset while this
+    // device was closed) must still get cleared on its very next poll,
+    // even though that reset is the first epoch this device has ever
+    // observed. Treating null as "different" costs one harmless extra
+    // reload for a genuinely brand-new device, which is an acceptable
+    // trade for actually honoring every reset.
+    if (data.resetEpoch !== seen) {
+      log.info('Party reset detected — clearing local session cache', { seen, now: data.resetEpoch });
+      const keepKeys = new Set(['gr_device_id', 'gr_fingerprint', 'gr_device_created']);
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('gr_') && !keepKeys.has(k))
+        .forEach(k => localStorage.removeItem(k));
+      sessionStorage.clear();
+      localStorage.setItem(RESET_EPOCH_KEY, data.resetEpoch);
+      window.location.reload();
     }
   };
 
   const handleStateUpdate = (data) => {
     const newState = data.state;
 
-    // State changed — fire handlers
-    if (newState !== lastKnownState) {
+    // State changed — fire handlers. Always fire on the first real server
+    // poll too, even if a page had pre-seeded lastKnownState from a stale
+    // sessionStorage cache (restoreFromCache()) that happens to match —
+    // otherwise a page that trusted a cached 'revealed'/'waiting' value
+    // would never get corrected once the server confirms the real state.
+    const isFirstPoll = !hasPolledServer;
+    hasPolledServer = true;
+    if (newState !== lastKnownState || isFirstPoll) {
       const prevState   = lastKnownState;
       lastKnownState    = newState;
       currentState      = newState;
+
+      log.info(`State change: ${prevState} -> ${newState}`);
 
       // Store gender if revealed
       if (data.gender) genderRevealed = data.gender;
@@ -116,10 +165,27 @@ const PartyState = (() => {
   // so match both forms.
   const AUTO_REDIRECT_PAGES = ['index.html', 'index', 'play.html', 'play', ''];
 
+  // Set once the guest has actually seen their revealed letter (see
+  // acknowledgeLetter below). The server keeps reporting isWinner/letter
+  // forever once scratched, so without this a guest who taps "Back to
+  // Party" would land on play.html/index.html only to be immediately
+  // bounced right back to letter.html by the very next poll.
+  const LETTER_ACK_KEY = 'gr_letter_ack';
+
+  const acknowledgeLetter = (voucherCode) => {
+    if (voucherCode) localStorage.setItem(LETTER_ACK_KEY, voucherCode);
+  };
+
   const maybeRedirectToVoucher = (data) => {
     if (!data.isWinner) return;
     const page = location.pathname.split('/').pop();
     if (!AUTO_REDIRECT_PAGES.includes(page)) return;
+
+    if (data.letter && localStorage.getItem(LETTER_ACK_KEY) === data.voucherCode) {
+      return; // already shown and acknowledged — let the guest stay put
+    }
+
+    log.info('Winner redirect triggered', { page, hasLetter: !!data.letter });
     window.location.href = data.letter ? 'letter.html' : 'scratch.html';
   };
 
@@ -136,6 +202,7 @@ const PartyState = (() => {
   // ─── STATE TRANSITIONS (Admin only) ────────────────────────
 
   const transitionTo = async (newState, adminToken) => {
+    log.info('Requesting transition to', newState);
     try {
       const response = await fetch('/api/party-state', {
         method:  'POST',
@@ -152,7 +219,7 @@ const PartyState = (() => {
       }
       return data;
     } catch (err) {
-      console.error('[PartyState] Transition failed:', err);
+      log.error('Transition failed:', err);
       return { success: false, error: err.message };
     }
   };
@@ -194,6 +261,7 @@ const PartyState = (() => {
     isFinale,
     isRevealed,
     restoreFromCache,
+    acknowledgeLetter,
   };
 
 })();

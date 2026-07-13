@@ -47,6 +47,7 @@
     import PartyState      from '../js/core/state.js';
     import Confetti        from '../js/systems/confetti.js';
     import ScratchCard      from '../js/systems/scratch-card.js';
+    import PARTY_CONFIG     from '../config/party-config.js';
 
     const session = SessionManager.getCurrentSession();
 
@@ -104,10 +105,13 @@
 
       SessionManager.updateSession({
         voucherCode: result.voucherCode, letter: result.letter, letterRevealed: true,
+        letterPosition: result.position,
       });
 
       headline.textContent = 'You found a letter!';
-      subline.textContent = 'Show this to the parents-to-be so it can join the secret code.';
+      subline.textContent = Number.isInteger(result.position)
+        ? `Letter ${result.position + 1} of ${PARTY_CONFIG.totalVouchers} — show this to the parents-to-be so it can join the secret code.`
+        : 'Show this to the parents-to-be so it can join the secret code.';
       continueBtn.style.display = 'inline-flex';
     };
 

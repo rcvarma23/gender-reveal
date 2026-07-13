@@ -68,6 +68,18 @@
       margin-bottom: 1.5rem;
     }
 
+    /* Hidden until the first party-state poll confirms the party is
+       actually active — a direct/fresh tab load to this page has no
+       cached state yet (sessionStorage is per-tab), so without this the
+       full picker flashes for a beat even when the party is still
+       "waiting", before the redirect to index.html lands. */
+    .age-grid.pending-check { visibility: hidden; }
+
+    .checking-state {
+      display: flex; flex-direction: column; align-items: center; gap: .75rem;
+      padding: 3rem 1rem; color: var(--text-muted); font-size: .85rem;
+    }
+
     .age-card-item {
       background: var(--navy-surface);
       border: 1.5px solid var(--border-subtle);
@@ -186,8 +198,14 @@
          <strong style="color:var(--gold-soft)">Kids go first 🍼</strong></p>
     </div>
 
+    <!-- Shown only while we're waiting on the first party-state poll -->
+    <div class="checking-state" id="checkingState">
+      <div class="waiting-dot" style="width:8px;height:8px;border-radius:50%;background:var(--gold-warm);animation:pulse-gold 1.2s ease-in-out infinite"></div>
+      Checking party status…
+    </div>
+
     <!-- Age Group Cards -->
-    <div class="age-grid" role="list" aria-label="Age groups">
+    <div class="age-grid pending-check" id="ageGrid" role="list" aria-label="Age groups">
 
       <div class="age-card-item anim-slide-up"
            role="listitem" tabindex="0"
@@ -282,7 +300,7 @@
       <div class="cooldown-timer" id="cooldownDisplay" aria-live="polite">2:00</div>
       <p style="font-size:.75rem;color:var(--text-muted);margin-top:.75rem">Or pass the phone to someone who hasn't played yet</p>
       <button class="btn btn-secondary btn--full" style="margin-top:1.25rem"
-              onclick="document.getElementById('cooldownModal').classList.add('hidden')">
+              onclick="dismissCooldown()">
         Got it 👍
       </button>
     </div>
@@ -296,24 +314,41 @@
     import SessionManager from '../js/core/session.js';
     import PartyState     from '../js/core/state.js';
     import API            from '../js/core/api.js';
+    import createLogger   from '../js/core/logger.js';
+
+    const log = createLogger('Play');
 
     // ─── INIT ─────────────────────────────────────────────────
 
-    const init = async () => {
-      // Redirect if party not active
-      const cached = PartyState.restoreFromCache();
-      if (cached === 'waiting')  { window.location.href = 'index.html'; return; }
-      if (cached === 'revealed') { window.location.href = 'reveal.html'; return; }
+    const revealPicker = () => {
+      document.getElementById('checkingState').style.display = 'none';
+      document.getElementById('ageGrid').classList.remove('pending-check');
+    };
 
-      // Start polling for state changes
+    const init = async () => {
+      // Peek at cached state for instant render only — never hard-navigate off
+      // it directly. A stale 'revealed'/'waiting' cache from before an admin
+      // reset must wait for the first real poll below (which checks resetEpoch)
+      // before we act on it, otherwise a reset tab would redirect right back.
+      const cached = PartyState.restoreFromCache();
+      log.debug('Init — cached party state', cached);
+      if (cached === 'active') revealPicker();   // known-good — no need to wait on a poll
+
+      // Start polling for state changes. The first poll always fires this
+      // handler (see hasPolledServer in state.js) even if the server confirms
+      // the same value already seeded from cache above.
       PartyState.startPolling((state) => {
-        if (state === 'waiting')  window.location.href = 'index.html';
-        if (state === 'revealed') window.location.href = 'reveal.html';
+        log.debug('Poll state', state);
+        if (state === 'waiting')  { window.location.href = 'index.html'; return; }
+        if (state === 'revealed') { window.location.href = 'reveal.html'; return; }
         if (state === 'finale')   {
           // Only couple game visible — hide age selector
-          document.querySelector('.age-grid').style.display = 'none';
+          document.getElementById('ageGrid').style.display = 'none';
+          document.getElementById('checkingState').style.display = 'none';
           showToast('Games are now closed! Watch the couple reveal! 🎀');
+          return;
         }
+        if (state === 'active') revealPicker();
       });
 
       // Check for existing sessions on this device
@@ -379,9 +414,12 @@
     // ─── AGE SELECTION ────────────────────────────────────────
 
     window.selectAge = async (ageGroup) => {
+      log.info('Age selected', ageGroup);
+
       // Check cooldown for adults/teens
       const cooldownMs = SessionManager.getCooldownRemaining(ageGroup);
       if (cooldownMs > 0) {
+        log.info('Blocked by cooldown', { ageGroup, cooldownMs });
         showCooldown(cooldownMs);
         return;
       }
@@ -459,6 +497,11 @@
     let cooldownInterval = null;
 
     const showCooldown = (remainingMs) => {
+      // A previous call's interval must be torn down first — otherwise two
+      // intervals write to the same display element and the countdown
+      // appears to jump between two different (summed-looking) values.
+      if (cooldownInterval) clearInterval(cooldownInterval);
+
       const modal   = document.getElementById('cooldownModal');
       const display = document.getElementById('cooldownDisplay');
       modal.classList.remove('hidden');
@@ -471,12 +514,18 @@
         display.textContent = `${m}:${s.toString().padStart(2,'0')}`;
         if (remaining <= 0) {
           clearInterval(cooldownInterval);
+          cooldownInterval = null;
           modal.classList.add('hidden');
         }
         remaining--;
       };
       update();
       cooldownInterval = setInterval(update, 1000);
+    };
+
+    window.dismissCooldown = () => {
+      document.getElementById('cooldownModal').classList.add('hidden');
+      if (cooldownInterval) { clearInterval(cooldownInterval); cooldownInterval = null; }
     };
 
     // ─── TOAST ────────────────────────────────────────────────

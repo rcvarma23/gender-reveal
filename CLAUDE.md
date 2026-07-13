@@ -53,9 +53,9 @@ gender-reveal/
 │   │   ├── game-kid.html            ✅ DONE — Emoji match + scramble
 │   │   ├── game-teen.html           ✅ DONE — Trivia + hard scramble, one turn only
 │   │   ├── game-adult.html          ✅ DONE — Predictions quiz, one turn only
-│   │   ├── result.html              ❌ TODO Phase 7 — dedicated non-winner recap page
-│   │   │                               (teen/adult currently show an inline neutral
-│   │   │                               "thanks for playing" overlay instead)
+│   │   ├── result.html              ✅ DONE — dedicated non-winner recap page (resume
+│   │   │                               flow from play.html routes completed non-winner
+│   │   │                               sessions here instead of the game's own overlay)
 │   │   ├── sticker-book.html        ✅ DONE — Kid sticker collection
 │   │   ├── scratch.html             ✅ DONE — Scratch card canvas
 │   │   ├── letter.html              ✅ DONE — Letter reveal screen (resumable)
@@ -75,9 +75,14 @@ gender-reveal/
 │   │   │   ├── device.js            ✅ DONE — Device ID + fingerprinting
 │   │   │   ├── session.js           ✅ DONE — Player session manager
 │   │   │   ├── state.js             ✅ DONE — Party state polling + auto-redirect to
-│   │   │   │                           scratch.html/letter.html when isWinner turns true
+│   │   │   │                           scratch.html/letter.html when isWinner turns true;
+│   │   │   │                           also detects the server's reset_epoch bump and
+│   │   │   │                           wipes local gr_* storage on admin reset-party
 │   │   │   ├── storage.js           ✅ DONE — localStorage wrapper
-│   │   │   └── api.js               ✅ DONE — All Worker API calls
+│   │   │   ├── api.js               ✅ DONE — All Worker API calls
+│   │   │   └── logger.js            ✅ DONE — Tagged debug logger, ring-buffer +
+│   │   │                               window.GRLog console helper (?debug=1 or
+│   │   │                               localStorage gr_debug=true to enable verbose output)
 │   │   │
 │   │   ├── systems/
 │   │   │   ├── fingerprint.js       ✅ DONE — Browser fingerprinting
@@ -168,7 +173,7 @@ gender-reveal/
 |-------|-----|-------|--------|-------|
 | Toddler | 0–5 | Balloon pop, Feed baby | Stickers ⭐ | No timer shown, replay forever |
 | Kid | 5–10 | Emoji match, Scramble | Stickers ⭐ | Replay forever |
-| Teen | 10–18 | Trivia, Hard scramble | Voucher 🎟️ | 1 turn, 5-min cooldown |
+| Teen | 10–18 | Trivia, Hard scramble | Voucher 🎟️ | 1 turn, 2.5-min cooldown |
 | Adult | 20+ | Predictions quiz | Voucher 🎟️ | 1 turn, 3-min cooldown, kid-first gate |
 
 **Kid-first gate:** Adults only get voucher eligibility AFTER a kid plays on the same phone.
@@ -189,7 +194,7 @@ gender-reveal/
 |-------|----------------|
 | 1 | Session lock — completed sessions cannot replay |
 | 2 | Speed check — too fast = silently disqualified |
-| 3 | Device cooldown — 3 min adults, 5 min teens |
+| 3 | Device cooldown — 3 min adults, 2.5 min teens |
 | 4 | Tab farming — BroadcastChannel detects parallel tabs |
 | 5 | Fingerprinting — survives incognito/cache clear |
 | 6 | Device cap — max 1 voucher per physical device |
@@ -263,7 +268,7 @@ URL: `/pages/admin.html`
 | `GET /api/party-state` | party-state.js | Poll state (guests, every 10s). Only reveals a winner's `letter` once their voucher's `status` is `revealed` — never leaks it early |
 | `POST /api/party-state` | party-state.js | Change state (admin only) |
 | `POST /api/session/create` | session-manager.js | Register new player |
-| `POST /api/session/complete` | session-manager.js | Lock session + anti-cheat. Only sets `device.lastCompletionAt` (cooldown clock) for adult/teen — a kid finishing must never cooldown-block the very next adult attempt on the same phone |
+| `POST /api/session/complete` | session-manager.js | Lock session + anti-cheat. Only sets `device.lastCompletionByGroup[ageGroup]` (cooldown clock, keyed per age group so adult/teen cooldowns never cross-block each other) for adult/teen — a kid finishing must never cooldown-block the very next adult attempt on the same phone |
 | `GET /api/session/resume/:id` | session-manager.js | Resume state |
 | `POST /api/voucher/request` | voucher-engine.js | Check/claim this device's voucher (post-draw only — winner selection itself happens in `admin/draw`) |
 | `POST /api/voucher/scratch` | voucher-engine.js | Reveal letter (only the winning device may scratch its own code) |
@@ -301,7 +306,10 @@ URL: `/pages/admin.html`
 "session_{id}"            → full session object (voucherCode/letterRevealed/letter
                               get filled in by voucher-engine.js on scratch)
 "device_{id}"             → device record (sessions, vouchersIssued, kidPlayedFirst,
-                              lastCompletionAt — only set by adult/teen completions)
+                              lastCompletionByGroup: { adult?, teen? } — only set by
+                              adult/teen completions, keyed per age group so an
+                              adult's play never cooldown-blocks a teen's turn or vice
+                              versa on a shared phone)
 "stickers_{deviceId}"     → array of sticker objects
 "letters_revealed"        → JSON array of { position, letter }
 "admin_session_token"     → short-lived admin auth token
@@ -311,6 +319,10 @@ URL: `/pages/admin.html`
 "couple_puzzle_letters"   → JSON array — the shuffled tile set (fixed once generated)
 "couple_attempts"         → 0 | 1 | 2 | 3
 "video_unlocked"          → bool
+"reset_epoch"             → timestamp string, bumped by admin/reset-party; guests'
+                              party-state poll compares it against their locally
+                              cached value and auto-clears gr_* localStorage/
+                              sessionStorage (except device identity) on mismatch
 ```
 
 ---
@@ -378,15 +390,19 @@ the real party:
    `SECRET_CODE=BABYLOVEIS`). Run the `wrangler secret put` commands below
    with real values, and create the real KV namespace (wrangler.toml still
    has placeholder `YOUR_KV_ID_HERE` / `YOUR_PREVIEW_KV_ID`).
-3. **`result.html`** — teen/adult non-winners currently just see an inline
-   neutral "thanks for playing" overlay on game-teen.html/game-adult.html
-   rather than a dedicated page; low priority since the overlay already
-   covers the UX need.
-4. Missing asset polish: lottie animations, sticker webp art, self-hosted
+3. Missing asset polish: lottie animations, sticker webp art, self-hosted
    DM Sans/Fredoka One font files (only Playfair Display is self-hosted
    today — the rest load from Google Fonts CDN, which needs connectivity
-   at the venue).
-5. Work through the **Testing Checklist** below on real devices.
+   at the venue). Background music was explicitly deferred — no audio
+   asset exists yet, add one + wire an `<audio>` loop into index.html
+   when ready.
+4. Work through the **Testing Checklist** below on real devices.
+5. Debug logging: `public/js/core/logger.js` now backs `PartyState`,
+   `SessionManager`, `DeviceManager`, and `play.html`. Enable verbose
+   console output with `?debug=1` on any page URL or
+   `localStorage.setItem('gr_debug','true')`; dump recent activity with
+   `GRLog.dump()` in devtools console. Worker-side `console.log` lines
+   (tagged `[SessionManager]` etc.) show up in the `wrangler dev` terminal.
 
 ---
 

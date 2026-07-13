@@ -19,7 +19,17 @@ const QUESTION_BANK = [
   { q: 'What is the fine, soft hair sometimes covering a newborn\'s body called?', choices: ['Lanugo', 'Vernix', 'Down', 'Peach fuzz only'], correct: 0 },
 ];
 
-const shuffle = (arr) => [...arr].sort(() => Math.random() - 0.5);
+// Fisher-Yates — Array.sort(() => Math.random() - 0.5) uses an
+// inconsistent comparator, which some engines' sort implementations can
+// respond to by dropping or duplicating elements.
+const shuffle = (arr) => {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
 
 export default function createGame(container, config, callbacks) {
 

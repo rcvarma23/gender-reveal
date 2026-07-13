@@ -288,6 +288,11 @@ export default {
         env.GR_KV.put('video_unlocked', 'false'),
         env.GR_KV.put('nudge_pending', 'false'),
         env.GR_KV.put('letters_revealed', '[]'),
+        // Bump the reset epoch so every guest device's next poll detects
+        // the reset and clears its own localStorage/sessionStorage —
+        // otherwise stale session/cooldown/device data survives until
+        // the guest manually closes and reopens the browser.
+        env.GR_KV.put('reset_epoch', Date.now().toString()),
       ]);
 
       await logAction('reset-party');

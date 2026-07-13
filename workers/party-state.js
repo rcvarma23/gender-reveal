@@ -48,6 +48,7 @@ export default {
       const state       = await env.GR_KV.get('party_state') || 'waiting';
       const gender      = await env.GR_KV.get('party_gender') || null;
       const nudgePending = await env.GR_KV.get('nudge_pending') === 'true';
+      const resetEpoch  = await env.GR_KV.get('reset_epoch') || '0';
 
       // Check if this device is a winner (post-draw)
       let isWinner    = false;
@@ -79,6 +80,7 @@ export default {
         voucherCode,
         letter,
         nudge:        nudgePending,
+        resetEpoch,
         timestamp:    Date.now(),
       });
     }

@@ -411,6 +411,21 @@
   touch-action: none;   /* prevent scroll while scratching */
 }
 
+/* Emoji stickers underneath a scratch card — plain glyph, no gradient clip */
+.scratch-letter-text.sticker-emoji {
+  font-size:  clamp(3.5rem, 16vw, 5.5rem);
+  background: none;
+  -webkit-text-fill-color: initial;
+  filter:     none;
+}
+
+.reveal-scratch-headline {
+  font-family: var(--font-display);
+  font-size:   1.1rem;
+  color:       var(--gold-soft);
+  max-width:   300px;
+}
+
 /* ─── TOAST ─────────────────────────────────────────────────── */
 
 .toast-container {

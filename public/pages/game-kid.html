@@ -61,11 +61,18 @@
 
   <div class="reveal-overlay" id="revealOverlay">
     <div class="reveal-card">
-      <div class="reveal-emoji" id="revealEmoji"></div>
-      <div class="reveal-name" id="revealName"></div>
-      <div style="display:flex;gap:.75rem">
+      <div class="reveal-scratch-headline">Scratch to reveal your sticker!</div>
+      <div class="scratch-card-wrap" id="stickerCardWrap">
+        <div class="scratch-letter">
+          <span class="scratch-letter-text sticker-emoji" id="revealEmoji"></span>
+        </div>
+        <canvas class="scratch-canvas" id="stickerCanvas"></canvas>
+      </div>
+      <div class="reveal-name" id="revealName" style="display:none"></div>
+      <div id="revealActions" style="display:none;gap:.75rem;flex-wrap:wrap;justify-content:center">
         <button class="btn btn-secondary" id="playAgainBtn">Play Again</button>
         <button class="btn btn-secondary" id="chooseAnotherBtn">Choose Another Game</button>
+        <button class="btn btn-secondary" id="homeBtn">Home</button>
       </div>
     </div>
   </div>
@@ -77,6 +84,7 @@
     import API            from '../js/core/api.js';
     import PartyState     from '../js/core/state.js';
     import Confetti       from '../js/systems/confetti.js';
+    import ScratchCard    from '../js/systems/scratch-card.js';
     import GAME_CONFIG     from '../../config/game-config.js';
 
     const GAMES = { 'emoji-match': EmojiMatch, 'baby-scramble': BabyScramble };
@@ -120,11 +128,29 @@
       if (result.success) showReveal(result.sticker);
     };
 
+    let scratchInstance = null;
+
     const showReveal = (sticker) => {
       document.getElementById('revealEmoji').textContent = sticker.emoji;
-      document.getElementById('revealName').textContent = sticker.name;
+      document.getElementById('revealName').textContent = '';
+      document.getElementById('revealName').style.display = 'none';
+      document.getElementById('revealActions').style.display = 'none';
       document.getElementById('revealOverlay').classList.add('visible');
-      Confetti.burst({ palette: RARITY_PALETTE[sticker.rarity] || 'gold' });
+
+      const canvas = document.getElementById('stickerCanvas');
+      canvas.style.display = 'block';
+      canvas.style.opacity = '1';
+      if (scratchInstance) scratchInstance.destroy();
+      scratchInstance = ScratchCard.init(canvas, {
+        thresholdPct: 55,
+        label: 'SCRATCH HERE',
+        onThreshold: () => {
+          document.getElementById('revealName').textContent = sticker.name;
+          document.getElementById('revealName').style.display = 'block';
+          document.getElementById('revealActions').style.display = 'flex';
+          Confetti.burst({ palette: RARITY_PALETTE[sticker.rarity] || 'gold' });
+        },
+      });
     };
 
     document.getElementById('playAgainBtn').addEventListener('click', () => {
@@ -138,6 +164,11 @@
       if (currentGame) currentGame.destroy();
       document.getElementById('gameStage').style.display = 'none';
       document.getElementById('pickerGrid').style.display = 'grid';
+    });
+
+    document.getElementById('homeBtn').addEventListener('click', () => {
+      if (currentGame) currentGame.destroy();
+      window.location.href = 'play.html';
     });
   </script>
 </body>

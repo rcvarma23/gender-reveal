@@ -18,7 +18,8 @@ const GAME_CONFIG = {
 
     'balloon-pop': {
       balloonsTotal:   10,
-      balloonsToWin:   8,        // pop 8 of 10 to complete
+      balloonsToWin:   8,        // pop 8 to complete...
+      minPlaySec:      45,       // ...but never finish before 45s of play
       spawnIntervalMs: 800,
       balloonSpeedMin: 0.4,
       balloonSpeedMax: 0.9,
@@ -27,11 +28,16 @@ const GAME_CONFIG = {
     },
 
     'feed-baby': {
-      foodItems:       6,
-      targetFoods:     ['🍼','🍌','🥛'],
-      wrongFoods:      ['🌶️','☕'],
-      displayTimeSec:  3,
-      rounds:          5,
+      // "Does Baby need this?" — Yes/No quiz. answer = the correct choice.
+      items: [
+        { label: 'Milk',   emoji: '🍼', answer: true  },
+        { label: 'Sleep',  emoji: '😴', answer: true  },
+        { label: 'Play',   emoji: '🧸', answer: true  },
+        { label: 'Bath',   emoji: '🛁', answer: true  },
+        { label: 'Coffee', emoji: '☕', answer: false },
+        { label: 'Spicy',  emoji: '🌶️', answer: false },
+        { label: 'Bike',   emoji: '🚲', answer: false },
+      ],
     },
   },
 
@@ -47,7 +53,8 @@ const GAME_CONFIG = {
     tapTargetPx:     64,
 
     'emoji-match': {
-      gridSize:        4,          // 4×4 = 16 cards = 8 pairs
+      gridCols:        2,
+      gridRows:        3,          // 2×3 = 6 cards = 3 pairs
       emojis:          ['🍼','👶','🎈','🧸','🦄','🌟','🐥','🌸'],
       flipBackMs:      900,
       gameDurationSec: 45,
@@ -57,15 +64,16 @@ const GAME_CONFIG = {
 
     'baby-scramble': {
       words:           ['BABY','LOVE','CRIB','MILK','BATH','CUTE','SOFT','PINK','BLUE','STAR'],
-      wordCount:       3,          // show 3 words per game
-      gameDurationSec: 45,
+      wordCount:       5,          // find 5 words per game
+      secPerWord:      30,         // 30s countdown per word card — card auto-advances on expiry
+      gameDurationSec: 999,        // overall safety cap only; per-word timer is the real gate
       pointsPerWord:   150,
     },
   },
 
   // ─── TEEN GAMES (10–18) ─────────────────────────────────────
   teen: {
-    games: ['baby-trivia', 'baby-scramble-hard'],
+    games: ['baby-trivia', 'baby-scramble-hard', 'emoji-match'],
     canReplay:       false,
     replayLimit:     1,
     getsStickers:    false,
@@ -73,7 +81,7 @@ const GAME_CONFIG = {
     showTimer:       true,
     minCompleteSecs: 30,
     tapTargetPx:     48,
-    cooldownMs:      5 * 60 * 1000,
+    cooldownMs:      2.5 * 60 * 1000,
 
     'baby-trivia': {
       questionCount:   10,
@@ -84,16 +92,33 @@ const GAME_CONFIG = {
     },
 
     'baby-scramble-hard': {
-      words:           ['LULLABY','NURSERY','STROLLER','NEWBORN','PACIFIER','MATERNITY'],
-      wordCount:       4,
+      // 2 small (<=4 letters), 2 medium (5-6), 2 large (>6) — sizeBalanced
+      // picks 2 from each bucket so every round mixes difficulty.
+      words: [
+        'CRIB', 'BURP', 'BABY', 'NAPS',                    // small
+        'DIAPER', 'RATTLE', 'CRADLE', 'BINKY',             // medium
+        'LULLABY', 'NURSERY', 'STROLLER', 'NEWBORN', 'PACIFIER', 'MATERNITY', // large
+      ],
+      sizeBalanced:    true,
+      wordCount:       6,
       gameDurationSec: 60,
       pointsPerWord:   200,
+    },
+
+    'emoji-match': {
+      gridCols:        3,
+      gridRows:        4,          // 3×4 = 12 cards = 6 pairs
+      emojis:          ['🍼','👶','🎈','🧸','🦄','🌟'],
+      flipBackMs:      700,
+      gameDurationSec: 120,
+      pointsPerMatch:  100,
+      bonusSpeedSec:   40,
     },
   },
 
   // ─── ADULT GAMES (20+) ──────────────────────────────────────
   adult: {
-    games: ['predictions-quiz'],
+    games: ['predictions-quiz', 'emoji-match'],
     canReplay:       false,
     replayLimit:     1,
     getsStickers:    false,
@@ -110,6 +135,16 @@ const GAME_CONFIG = {
       categories:      ['Cravings','Old Wives Tales','Baby Stats','Parent Instinct'],
       pointsCorrect:   125,
       bonusStreak:     50,        // extra 50 pts per consecutive correct
+    },
+
+    'emoji-match': {
+      gridCols:        4,
+      gridRows:        4,          // 4×4 = 16 cards = 8 pairs
+      emojis:          ['🍼','👶','🎈','🧸','🦄','🌟','🐥','🌸'],
+      flipBackMs:      700,
+      gameDurationSec: 120,
+      pointsPerMatch:  100,
+      bonusSpeedSec:   45,
     },
   },
 

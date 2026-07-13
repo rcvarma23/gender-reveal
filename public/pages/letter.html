@@ -45,6 +45,7 @@
       <span class="letter-box-text" id="letterChar">?</span>
     </div>
 
+    <div class="subline" id="positionLine"></div>
     <div class="subline">Show this letter to the parents-to-be — every guest's letter combines into the final code.</div>
 
     <button class="btn btn-secondary" id="backBtn">Back to Party</button>
@@ -55,30 +56,43 @@
     import API            from '../js/core/api.js';
     import PartyState      from '../js/core/state.js';
     import Confetti        from '../js/systems/confetti.js';
+    import PARTY_CONFIG    from '../config/party-config.js';
 
-    const letterChar = document.getElementById('letterChar');
+    const letterChar   = document.getElementById('letterChar');
+    const positionLine = document.getElementById('positionLine');
     const session = SessionManager.getCurrentSession();
 
     PartyState.startPolling((state) => {
       if (state === 'waiting') window.location.href = 'index.html';
     });
 
-    const showLetter = (letter) => {
+    const showLetter = (letter, position, voucherCode) => {
       letterChar.textContent = letter;
+      positionLine.textContent = Number.isInteger(position)
+        ? `Letter ${position + 1} of ${PARTY_CONFIG.totalVouchers}`
+        : '';
       Confetti.burst({ palette: 'gold' });
+
+      // Mark this voucher's letter as seen so the party-state poll on the
+      // hub pages (play.html/index.html) stops force-redirecting us back
+      // here every time — without this, "Back to Party" would just bounce
+      // straight back to this page since the server still reports isWinner.
+      if (voucherCode) PartyState.acknowledgeLetter(voucherCode);
     };
 
     const init = async () => {
       if (session?.letterRevealed && session.letter) {
-        showLetter(session.letter);
+        showLetter(session.letter, session.letterPosition, session.voucherCode);
         return;
       }
 
       if (session?.voucherCode) {
         const result = await API.voucher.status(session.voucherCode);
         if (result.success && result.exists && result.status === 'revealed') {
-          SessionManager.updateSession({ letter: result.letter, letterRevealed: true });
-          showLetter(result.letter);
+          SessionManager.updateSession({
+            letter: result.letter, letterRevealed: true, letterPosition: result.position,
+          });
+          showLetter(result.letter, result.position, session.voucherCode);
           return;
         }
       }

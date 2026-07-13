@@ -8,7 +8,7 @@ const PARTY_CONFIG = {
   // ─── PARTY DETAILS ──────────────────────────────────────────
   partyName:      "Baby Reveal Party",
   familyName:     "Our Family",           // shown on waiting screen
-  partyDate:      "2024-08-10",           // ISO format
+  partyDate:      "2026-07-25",           // ISO format
   partyLocation:  "Atlanta, GA",
 
   // ─── SECRET CODE ────────────────────────────────────────────
@@ -30,7 +30,7 @@ const PARTY_CONFIG = {
   // ─── TIMING RULES ───────────────────────────────────────────
   cooldowns: {
     adult:    3 * 60 * 1000,   // 3 min between adult sessions
-    teen:     5 * 60 * 1000,   // 5 min between teen sessions
+    teen:     2.5 * 60 * 1000, // 2.5 min between teen sessions
     kid:      0,               // no cooldown for kids
     toddler:  0,
   },

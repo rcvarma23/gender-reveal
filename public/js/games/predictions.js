@@ -17,7 +17,17 @@ const QUESTION_BANK = [
   { category: 'Parent Instinct', q: 'Which parent do you think loses the most sleep in month one?', choices: ['Mom', 'Dad', 'Split evenly', 'Depends on the night'] },
 ];
 
-const shuffle = (arr) => [...arr].sort(() => Math.random() - 0.5);
+// Fisher-Yates — Array.sort(() => Math.random() - 0.5) uses an
+// inconsistent comparator, which some engines' sort implementations can
+// respond to by dropping or duplicating elements.
+const shuffle = (arr) => {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+};
 
 export default function createGame(container, config, callbacks) {
 

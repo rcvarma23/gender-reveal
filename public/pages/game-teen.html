@@ -56,6 +56,10 @@
         <span class="card-emoji">🔤</span>
         <span class="card-name">Word Scramble</span>
       </div>
+      <div class="game-card" data-game="emoji-match" tabindex="0" onclick="playGame('emoji-match')">
+        <span class="card-emoji">🃏</span>
+        <span class="card-name">Emoji Match</span>
+      </div>
     </div>
 
     <div id="gameStage"></div>
@@ -79,6 +83,7 @@
   <script type="module">
     import Trivia          from '../js/games/trivia.js';
     import BabyScramble    from '../js/games/baby-scramble.js';
+    import EmojiMatch      from '../js/games/emoji-match.js';
     import SessionManager  from '../js/core/session.js';
     import DeviceManager   from '../js/core/device.js';
     import TabGuard        from '../js/systems/tab-guard.js';
@@ -86,7 +91,7 @@
     import PartyState      from '../js/core/state.js';
     import GAME_CONFIG      from '../../config/game-config.js';
 
-    const GAMES = { 'baby-trivia': Trivia, 'baby-scramble-hard': BabyScramble };
+    const GAMES = { 'baby-trivia': Trivia, 'baby-scramble-hard': BabyScramble, 'emoji-match': EmojiMatch };
 
     let currentGame = null;
 
@@ -125,7 +130,7 @@
 
     const onGameComplete = async (gameType, score) => {
       TabGuard.announceGameComplete();
-      SessionManager.recordCompletion();
+      SessionManager.recordCompletion(session.ageGroup);
       SessionManager.lockSession({ score, gameType });
 
       await API.session.complete(session.sessionId, {

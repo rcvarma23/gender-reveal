@@ -4,6 +4,10 @@
  * Lives in localStorage forever — survives all reloads
  */
 
+import createLogger from './logger.js';
+
+const log = createLogger('Device');
+
 const DeviceManager = (() => {
 
   const DEVICE_KEY    = 'gr_device_id';
@@ -23,6 +27,7 @@ const DeviceManager = (() => {
       id = `GR-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       localStorage.setItem(DEVICE_KEY, id);
       localStorage.setItem(CREATED_KEY, Date.now().toString());
+      log.info('New device ID created', id);
     }
     return id;
   };
@@ -138,7 +143,11 @@ const DeviceManager = (() => {
       totalSessions:     0,
       sessions:          [],
       stickers:          [],
-      lastCompletionAt:  null,
+      // Cooldown clock per age group — adult and teen are independent
+      // people on a shared phone with different cooldown durations, so
+      // one flat timestamp would let an adult's play cooldown-block a
+      // teen (or vice versa) using the WRONG duration.
+      lastCompletionByGroup: {},
     };
   };
 
@@ -150,6 +159,7 @@ const DeviceManager = (() => {
     const current = getLocalDeviceData();
     const merged  = { ...current, ...updates };
     setLocalDeviceData(merged);
+    log.debug('Device data updated', updates);
     return merged;
   };
 

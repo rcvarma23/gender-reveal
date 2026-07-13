@@ -21,6 +21,11 @@
     .start-card .card-emoji { font-size: 3.5rem; display: block; margin-bottom: .75rem; }
     .start-card .card-name  { font-size: 1.15rem; font-weight: 600; color: var(--gold-soft); margin-bottom: .5rem; }
     .start-card .card-sub   { font-size: .85rem; color: var(--text-muted); margin-bottom: 1.5rem; }
+    .picker-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .875rem; width: 100%; max-width: 420px; }
+    .game-card { background: var(--navy-surface); border: 1.5px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 1.75rem 1rem; text-align: center; cursor: pointer; transition: all var(--transition-slow); -webkit-tap-highlight-color: transparent; }
+    .game-card:hover, .game-card:focus { border-color: var(--border-gold); background: var(--navy-card); transform: translateY(-3px); outline: none; }
+    .game-card .card-emoji { font-size: 3rem; display: block; margin-bottom: .5rem; }
+    .game-card .card-name  { font-size: 1rem; font-weight: 600; color: var(--gold-soft); }
     #gameStage { display: none; width: 100%; max-width: 420px; height: 60vh; background: var(--navy-surface); border-radius: var(--radius-lg); border: 1.5px solid var(--border-subtle); position: relative; overflow: hidden; }
     .reveal-overlay { position: fixed; inset: 0; z-index: 9999; display: none; align-items: center; justify-content: center; background: rgba(8,7,23,.92); text-align: center; padding: 1.5rem; }
     .reveal-overlay.visible { display: flex; }
@@ -46,11 +51,15 @@
       <span class="badge badge-gold">🎟️ One turn only</span>
     </div>
 
-    <div class="start-card" id="startCard">
-      <span class="card-emoji">🔮</span>
-      <div class="card-name">Baby Predictions Quiz</div>
-      <div class="card-sub">Cravings, old wives' tales, and parent instincts — no wrong answers!</div>
-      <button class="btn btn-primary" id="startBtn">Start Quiz</button>
+    <div class="picker-grid" id="pickerGrid">
+      <div class="game-card" data-game="predictions-quiz" tabindex="0" onclick="playGame('predictions-quiz')">
+        <span class="card-emoji">🔮</span>
+        <span class="card-name">Predictions Quiz</span>
+      </div>
+      <div class="game-card" data-game="emoji-match" tabindex="0" onclick="playGame('emoji-match')">
+        <span class="card-emoji">🃏</span>
+        <span class="card-name">Emoji Match</span>
+      </div>
     </div>
 
     <div id="gameStage"></div>
@@ -73,12 +82,15 @@
 
   <script type="module">
     import Predictions     from '../js/games/predictions.js';
+    import EmojiMatch      from '../js/games/emoji-match.js';
     import SessionManager  from '../js/core/session.js';
     import DeviceManager   from '../js/core/device.js';
     import TabGuard        from '../js/systems/tab-guard.js';
     import API             from '../js/core/api.js';
     import PartyState      from '../js/core/state.js';
     import GAME_CONFIG      from '../../config/game-config.js';
+
+    const GAMES = { 'predictions-quiz': Predictions, 'emoji-match': EmojiMatch };
 
     let currentGame = null;
 
@@ -97,27 +109,27 @@
 
     // One turn only — if this session already finished, don't allow another attempt
     if (session && SessionManager.isSessionLocked(session)) {
-      document.getElementById('startCard').style.display = 'none';
+      document.getElementById('pickerGrid').style.display = 'none';
       document.getElementById('alreadyPlayed').style.display = 'flex';
     }
 
-    document.getElementById('startBtn').addEventListener('click', () => {
-      document.getElementById('startCard').style.display = 'none';
+    window.playGame = (gameType) => {
+      document.getElementById('pickerGrid').style.display = 'none';
       const stage = document.getElementById('gameStage');
       stage.style.display = 'block';
       stage.innerHTML = '';
 
-      const config = GAME_CONFIG.adult['predictions-quiz'];
-      currentGame = Predictions(stage, config, {
+      const config = GAME_CONFIG.adult[gameType];
+      currentGame = GAMES[gameType](stage, config, {
         onProgress: (pct) => SessionManager.updateSession({ gameProgress: pct }),
-        onComplete: (score) => onGameComplete('predictions-quiz', score),
+        onComplete: (score) => onGameComplete(gameType, score),
       });
       currentGame.start();
-    });
+    };
 
     const onGameComplete = async (gameType, score) => {
       TabGuard.announceGameComplete();
-      SessionManager.recordCompletion();
+      SessionManager.recordCompletion(session.ageGroup);
       SessionManager.lockSession({ score, gameType });
 
       await API.session.complete(session.sessionId, {
