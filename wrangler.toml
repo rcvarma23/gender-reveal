@@ -12,8 +12,8 @@ directory = "./public"
 # ── KV NAMESPACES ──────────────────────────────────────────────
 [[kv_namespaces]]
 binding = "GR_KV"
-id      = "YOUR_KV_ID_HERE"         # replace after: wrangler kv:namespace create "GR_KV"
-preview_id = "YOUR_PREVIEW_KV_ID"   # replace after: wrangler kv:namespace create "GR_KV" --preview
+id      = "fc681d36b51d486dbbf71511c1251407"
+preview_id = "e2ff626adafb4495945c394f28ac9846"
 
 # ── R2 BUCKET (video storage) ───────────────────────────────────
 [[r2_buckets]]
