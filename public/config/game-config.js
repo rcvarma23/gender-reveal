@@ -126,7 +126,10 @@ const GAME_CONFIG = {
 
   // ─── ADULT GAMES (20+) ──────────────────────────────────────
   adult: {
-    games: ['predictions-quiz', 'emoji-match'],
+    // predictions-quiz removed — its questions were merged into the
+    // live "Big Guess" event (public/config/big-guess-questions.js);
+    // Emoji Match is now the adult's one-turn voucher game.
+    games: ['emoji-match'],
     canReplay:       false,
     replayLimit:     1,
     getsStickers:    false,
@@ -137,14 +140,6 @@ const GAME_CONFIG = {
     cooldownMs:      60 * 1000,
     // requiresKidFirst removed — any adult who plays is voucher-eligible
     // regardless of whether a kid played on the same device first
-
-    'predictions-quiz': {
-      questionCount:   8,
-      secPerQuestion:  30,
-      categories:      ['Cravings','Old Wives Tales','Baby Stats','Parent Instinct'],
-      pointsCorrect:   125,
-      bonusStreak:     50,        // extra 50 pts per consecutive correct
-    },
 
     'emoji-match': {
       gridCols:        4,

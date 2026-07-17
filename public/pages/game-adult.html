@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0D0B1E">
-  <title>Adult Predictions 🔮</title>
+  <title>Adult Games 🃏</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&family=Fredoka+One&display=swap" rel="stylesheet">
@@ -21,7 +21,7 @@
     .start-card .card-emoji { font-size: 3.5rem; display: block; margin-bottom: .75rem; }
     .start-card .card-name  { font-size: 1.15rem; font-weight: 600; color: var(--gold-soft); margin-bottom: .5rem; }
     .start-card .card-sub   { font-size: .85rem; color: var(--text-muted); margin-bottom: 1.5rem; }
-    .picker-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .875rem; width: 100%; max-width: 420px; }
+    .picker-grid { display: grid; grid-template-columns: 1fr; gap: .875rem; width: 100%; max-width: 220px; }
     .game-card { background: var(--navy-surface); border: 1.5px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 1.75rem 1rem; text-align: center; cursor: pointer; transition: all var(--transition-slow); -webkit-tap-highlight-color: transparent; }
     .game-card:hover, .game-card:focus { border-color: var(--border-gold); background: var(--navy-card); transform: translateY(-3px); outline: none; }
     .game-card .card-emoji { font-size: 3rem; display: block; margin-bottom: .5rem; }
@@ -52,10 +52,6 @@
     </div>
 
     <div class="picker-grid" id="pickerGrid">
-      <div class="game-card" data-game="predictions-quiz" tabindex="0" onclick="playGame('predictions-quiz')">
-        <span class="card-emoji">🔮</span>
-        <span class="card-name">Predictions Quiz</span>
-      </div>
       <div class="game-card" data-game="emoji-match" tabindex="0" onclick="playGame('emoji-match')">
         <span class="card-emoji">🃏</span>
         <span class="card-name">Emoji Match</span>
@@ -81,7 +77,6 @@
   </div>
 
   <script type="module">
-    import Predictions     from '../js/games/predictions.js';
     import EmojiMatch      from '../js/games/emoji-match.js';
     import SessionManager  from '../js/core/session.js';
     import DeviceManager   from '../js/core/device.js';
@@ -90,7 +85,7 @@
     import PartyState      from '../js/core/state.js';
     import GAME_CONFIG      from '../../config/game-config.js';
 
-    const GAMES = { 'predictions-quiz': Predictions, 'emoji-match': EmojiMatch };
+    const GAMES = { 'emoji-match': EmojiMatch };
 
     let currentGame = null;
 

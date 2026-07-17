@@ -1,10 +1,12 @@
 /**
- * CLOUDFLARE WORKER W7 — Opinion Poll Engine
- * A special admin-triggered live poll for the adult group, run off a
- * TV/laptop display (pages/poll-host.html) while guests vote on their
- * phones (embedded in pages/game-adult.html). Fully server-timed so the
- * host screen and every guest phone stay in sync without any per-request
- * admin "next question" click.
+ * CLOUDFLARE WORKER W7 — "The Big Guess" Live Poll Engine
+ * A special admin-triggered live guessing game open to everyone (its own
+ * tile on play.html, not tied to an age group), run off a TV/laptop
+ * display (pages/poll-host.html) while guests vote on their phones
+ * (pages/guess.html). Fully server-timed so the host screen and every
+ * guest phone stay in sync without any per-request admin "next question"
+ * click. Internal names still say "poll" (KV keys, routes) from before
+ * this was renamed for guests.
  *
  * Routes:
  *   GET  /api/poll/state   → current status/question/phase/tally (guests + host poll this)
@@ -24,17 +26,14 @@
  *   poll_final_results       → JSON array of { question, choices, totalVotes }, written once on completion
  */
 
-// Server-authoritative question bank — guests never see this file, only
-// the sanitized question/choices via /api/poll/state.
-export const POLL_QUESTIONS = [
-  { q: 'What is the baby going to be?', choices: ['Boy', 'Girl'] },
-  { q: "If it's a boy, his name will...", choices: ['End with "Ansh"', 'Be something else'] },
-  { q: "If it's a girl, her name will start with...", choices: ['A–M', 'N–Z'] },
-  { q: 'What time will the baby be born?', choices: ['Morning', 'Evening', 'Night'] },
-  { q: 'Who will be more tense on delivery day?', choices: ['Satish', 'Sanjana', 'Neither — N/A'] },
-  { q: 'Did Satish start playing pickleball after the baby was born?', choices: ['Within 15 days', 'After 1 month'] },
-  { q: 'The baby will be born on a...', choices: ['Weekday', 'Weekend'] },
-];
+// Question content lives in ONE place — public/config/big-guess-questions.js
+// — so it can be edited (add/remove/reword questions) without touching any
+// worker logic. Like every other config/ file it's technically fetchable
+// directly (Wrangler [assets] serves the whole public/ dir), same as every
+// other game's answer key already is — not a secret, just avoids the
+// question content being duplicated/drifting across files.
+import BIG_GUESS_QUESTIONS from '../public/config/big-guess-questions.js';
+export const POLL_QUESTIONS = BIG_GUESS_QUESTIONS;
 
 export const VOTE_SEC    = 30; // guests can vote during this window
 export const RESULTS_SEC = 10; // results shown before auto-advancing

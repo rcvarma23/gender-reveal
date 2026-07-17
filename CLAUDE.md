@@ -44,7 +44,15 @@ gender-reveal/
 │   │   │                               Workers/session/sticker logic hardcode their own
 │   │   │                               constants independently. Keep both in sync by hand.
 │   │   ├── game-config.js           ✅ DONE — Game timing/difficulty per age group
-│   │   └── sticker-catalog.js       ✅ DONE — 12 earnable + 1 secret sticker, rarity weights
+│   │   ├── sticker-catalog.js       ✅ DONE — 12 earnable + 1 secret sticker, rarity weights
+│   │   └── big-guess-questions.js   ✅ DONE — The Big Guess's question bank. Imported by
+│   │                                   workers/poll-engine.js (Wrangler bundles main=
+│   │                                   workers/index.js and freely resolves relative
+│   │                                   imports anywhere in the repo, not just workers/) —
+│   │                                   THIS is the one actually-imported exception to the
+│   │                                   "config/ is docs-only" rule above. Edit this file
+│   │                                   to add/remove/reword Big Guess questions; no other
+│   │                                   code needs to change.
 │   │
 │   ├── pages/
 │   │   ├── index.html               ✅ DONE — Waiting screen (celestial starfield)
@@ -54,7 +62,9 @@ gender-reveal/
 │   │   ├── game-toddler.html        ✅ DONE — Balloon pop + feed baby
 │   │   ├── game-kid.html            ✅ DONE — Emoji match + scramble
 │   │   ├── game-teen.html           ✅ DONE — Trivia + hard scramble, one turn only
-│   │   ├── game-adult.html          ✅ DONE — Predictions quiz, one turn only
+│   │   ├── game-adult.html          ✅ DONE — Emoji Match, one turn only (Predictions
+│   │   │                               Quiz removed — its questions merged into The Big
+│   │   │                               Guess, see big-guess-questions.js)
 │   │   ├── result.html              ✅ DONE — dedicated non-winner recap page (resume
 │   │   │                               flow from play.html routes completed non-winner
 │   │   │                               sessions here instead of the game's own overlay)
@@ -98,13 +108,15 @@ gender-reveal/
 │   │   │   ├── confetti.js          ✅ DONE — Particle confetti engine
 │   │   │   └── scratch-card.js      ✅ DONE — Canvas scratch-off, threshold-based reveal
 │   │   │
-│   │   ├── games/                   ✅ DONE — all 6
+│   │   ├── games/                   ✅ DONE — all 5 (predictions.js removed —
+│   │   │                               Predictions Quiz was retired as an adult
+│   │   │                               voucher game and its questions merged into
+│   │   │                               The Big Guess, see big-guess-questions.js)
 │   │   │   ├── balloon-pop.js
 │   │   │   ├── feed-baby.js
 │   │   │   ├── emoji-match.js
 │   │   │   ├── baby-scramble.js       (shared by kid + teen-hard, config-driven)
-│   │   │   ├── trivia.js
-│   │   │   └── predictions.js
+│   │   │   └── trivia.js
 │   │   │       (couple's letter puzzle lives inline in couple-game.html, not a
 │   │   │        separate games/ module — it's tightly coupled to attempt/hint
 │   │   │        state from the couple-game.js Worker, unlike the replayable
@@ -186,7 +198,7 @@ gender-reveal/
 | Toddler | 0–5 | Balloon pop, Feed baby | Stickers ⭐ | No timer shown, replay forever |
 | Kid | 5–10 | Emoji match, Scramble | Stickers ⭐ | Replay forever |
 | Teen | 10–18 | Trivia, Hard scramble | Voucher 🎟️ | 1 turn, 60s cooldown |
-| Adult | 20+ | Predictions quiz | Voucher 🎟️ | 1 turn, 60s cooldown |
+| Adult | 20+ | Emoji Match | Voucher 🎟️ | 1 turn, 60s cooldown |
 
 **No kid-first gate:** Removed — any adult who plays and clears speed/tab-farming checks is
 voucher-eligible immediately, regardless of whether a kid played on the same device first.
@@ -195,10 +207,13 @@ party) so it doesn't matter who played in what order.
 
 **The Big Guess (all ages, admin-triggered):** A separate live guessing game, not a voucher
 game — its own tile on `play.html` (outside the four age-group cards), grayed out until the
-admin presses "Enable"; guessing only opens once the admin presses "Start". 7 questions, 30s
-to guess + 10s to see results, auto-advancing off a server timestamp (`workers/poll-engine.js`,
-internal key/route names still say "poll") so every phone and the TV host display
-(`pages/poll-host.html`) stay in sync without a manual "next" click. Lives at `pages/guess.html`.
+admin presses "Enable"; guessing only opens once the admin presses "Start". Question count is
+however many are in `public/config/big-guess-questions.js` (15 as of this merge — the original
+7 guess questions plus the former Predictions Quiz's 8, personalized and folded in when that
+game was retired as an adult voucher option). Each question runs 30s to guess + 10s to see
+results, auto-advancing off a server timestamp (`workers/poll-engine.js`, internal key/route
+names still say "poll") so every phone and the TV host display (`pages/poll-host.html`) stay in
+sync without a manual "next" click. Lives at `pages/guess.html`.
 
 ---
 
@@ -497,7 +512,7 @@ the real party:
 □ Admin force video — works as override
 □ Full flow on 4G mobile — loads under 2 seconds
 □ Admin enables + starts The Big Guess — 5th tile on play.html un-grays, TV display (poll-host.html) and guest phones show question 1 in sync
-□ The Big Guess — guess submitted, results shown after 30s, auto-advances through all 7 questions, final results shown on completion
+□ The Big Guess — guess submitted, results shown after 30s, auto-advances through every question in big-guess-questions.js, final results shown on completion
 □ Adult plays without a kid playing first on the same phone — still voucher-eligible
 ```
 
