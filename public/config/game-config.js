@@ -100,16 +100,17 @@ const GAME_CONFIG = {
     },
 
     'baby-scramble-hard': {
-      // 2 small (<=4 letters), 2 medium (5-6), 2 large (>6) — sizeBalanced
-      // picks 2 from each bucket so every round mixes difficulty.
+      // sizeBalanced spreads wordCount evenly across small (<=4 letters),
+      // medium (5-6) and large (>6) buckets — for 5 words that's 2/2/1.
       words: [
         'CRIB', 'BURP', 'BABY', 'NAPS',                    // small
-        'DIAPER', 'RATTLE', 'CRADLE',              // medium
-         'NURSERY', 'STROLLER', 'NEWBORN', 'PACIFIER', 'MATERNITY', // large
+        'DIAPER', 'RATTLE', 'CRADLE',                      // medium
+        'NURSERY', 'STROLLER', 'NEWBORN', 'PACIFIER', 'MATERNITY', // large
       ],
       sizeBalanced:    true,
-      wordCount:       6,
-      gameDurationSec: 60,
+      wordCount:       5,
+      secPerWord:      30,        // 30s countdown per word card — card auto-advances on expiry
+      gameDurationSec: 999,       // overall safety cap only; per-word timer is the real gate
       pointsPerWord:   200,
     },
 

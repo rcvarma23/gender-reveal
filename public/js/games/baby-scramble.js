@@ -19,24 +19,31 @@ const shuffleArray = (arr) => {
   return a;
 };
 
-// Picks 2 words each from small (<=4 letters), medium (5-6) and large (>6)
-// buckets so every round has a mix of difficulty, instead of a flat random
-// slice that could hand back six same-length words.
-const pickSizeBalanced = (wordList) => {
+// Picks `count` words spread as evenly as possible across small (<=4
+// letters), medium (5-6) and large (>6) buckets so every round has a mix
+// of difficulty, instead of a flat random slice that could hand back
+// several same-length words. Any remainder is given to the small/medium
+// buckets first (e.g. count=5 -> 2 small, 2 medium, 1 large).
+const pickSizeBalanced = (wordList, count) => {
   const small  = wordList.filter(w => w.length <= 4);
   const medium = wordList.filter(w => w.length >= 5 && w.length <= 6);
   const large  = wordList.filter(w => w.length > 6);
+
+  const base = Math.floor(count / 3);
+  const remainder = count - base * 3;
+  const take = [base + (remainder > 0 ? 1 : 0), base + (remainder > 1 ? 1 : 0), base];
+
   return shuffleArray([
-    ...shuffleArray(small).slice(0, 2),
-    ...shuffleArray(medium).slice(0, 2),
-    ...shuffleArray(large).slice(0, 2),
+    ...shuffleArray(small).slice(0, take[0]),
+    ...shuffleArray(medium).slice(0, take[1]),
+    ...shuffleArray(large).slice(0, take[2]),
   ]);
 };
 
 export default function createGame(container, config, callbacks) {
 
   const words = config.sizeBalanced
-    ? pickSizeBalanced(config.words)
+    ? pickSizeBalanced(config.words, config.wordCount)
     : shuffleArray(config.words).slice(0, config.wordCount);
   let wordIndex = 0;
   let solvedCount = 0;
