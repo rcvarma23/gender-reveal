@@ -236,9 +236,12 @@ const SessionManager = (() => {
 
   // ─── COOLDOWN CHECK ────────────────────────────────────────
 
+  // Must match COOLDOWNS in workers/session-manager.js (server is
+  // authoritative — this copy is only for the pre-flight UI check before
+  // hitting the server) and cooldownMs in public/config/game-config.js.
   const COOLDOWNS = {
-    adult:   3 * 60 * 1000,
-    teen:    5 * 60 * 1000,
+    adult:   60 * 1000,
+    teen:    60 * 1000,
     kid:     0,
     toddler: 0,
   };

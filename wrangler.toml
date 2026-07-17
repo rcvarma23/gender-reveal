@@ -41,7 +41,10 @@ LETTERS_NEEDED   = "7"
 # ── SECRETS TO SET BEFORE PARTY ────────────────────────────────
 # npx wrangler secret put ADMIN_PIN_HASH
 # npx wrangler secret put COUPLE_PIN_HASH
-# npx wrangler secret put SECRET_CODE     ← the 10 letters
+# npx wrangler secret put SECRET_CODE          ← the 10-letter voucher/scratch-card phrase
+# npx wrangler secret put COUPLE_STAGE1_WORD   ← Stage 1 (Word Scramble) phrase
+# npx wrangler secret put COUPLE_STAGE2_WORD   ← Stage 2 (Memory Match) phrase
+# npx wrangler secret put COUPLE_STAGE3_WORD   ← Stage 3 (Puzzle Assembly) phrase
 
 # ── DEV ENVIRONMENT ──────────────────────────────────────────────
 # Separate Worker name, KV namespace, R2 bucket, and secrets from prod.
@@ -52,6 +55,9 @@ LETTERS_NEEDED   = "7"
 #   wrangler secret put ADMIN_PIN_HASH --env dev
 #   wrangler secret put COUPLE_PIN_HASH --env dev
 #   wrangler secret put SECRET_CODE --env dev
+#   wrangler secret put COUPLE_STAGE1_WORD --env dev
+#   wrangler secret put COUPLE_STAGE2_WORD --env dev
+#   wrangler secret put COUPLE_STAGE3_WORD --env dev
 [env.dev]
 name = "gender-reveal-dev-byrc"
 

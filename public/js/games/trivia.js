@@ -78,6 +78,7 @@ export default function createGame(container, config, callbacks) {
       .forEach((choice) => {
         const btn = document.createElement('button');
         btn.textContent = choice.text;
+        btn.dataset.correct = choice.isCorrect ? '1' : '0';
         btn.style.cssText = `
           padding:.85rem 1rem; border-radius:var(--radius-md,12px);
           border:1.5px solid rgba(255,255,255,.15); background:var(--navy-mid,#2a2660);
@@ -106,16 +107,17 @@ export default function createGame(container, config, callbacks) {
     else score += config.pointsWrong;
 
     if (config.showAnswer) {
-      [...choicesEl.children].forEach((btn, i) => {
+      [...choicesEl.children].forEach((btn) => {
         btn.disabled = true;
-        if (btn === btnEl) btn.style.borderColor = isCorrect ? 'var(--gold-bright,#FFD700)' : '#E57373';
+        if (btn.dataset.correct === '1') btn.style.borderColor = 'var(--gold-bright,#FFD700)';
+        else if (btn === btnEl) btn.style.borderColor = '#E57373';
       });
     }
 
     callbacks.onProgress(Math.round(((qIndex + 1) / questions.length) * 100));
 
     qIndex++;
-    setTimeout(loadQuestion, config.showAnswer ? 700 : 200);
+    setTimeout(loadQuestion, config.showAnswer ? 1400 : 200);
   };
 
   const finish = () => {

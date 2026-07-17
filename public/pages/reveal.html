@@ -43,6 +43,15 @@
     import SessionManager   from '../js/core/session.js';
     import API              from '../js/core/api.js';
     import Confetti          from '../js/systems/confetti.js';
+    import PartyState        from '../js/core/state.js';
+
+    // Unlike every other guest page, reveal.html previously never polled
+    // party-state again after its initial load — so a guest sitting on
+    // this screen never saw admin's reset_epoch bump and stayed stuck on
+    // the old gender screen instead of bouncing back to the waiting page.
+    PartyState.startPolling((state) => {
+      if (state === 'waiting') window.location.href = 'index.html';
+    });
 
     const init = async () => {
       let gender = sessionStorage.getItem('gr_gender');

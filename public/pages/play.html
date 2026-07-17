@@ -126,19 +126,8 @@
       border-top: 1px solid var(--border-subtle);
       line-height: 1.8; display: block;
     }
-
-    /* Kid-first notice */
-    .kid-first-notice {
-      display: flex; align-items: flex-start; gap: .625rem;
-      padding: .875rem 1rem;
-      background: rgba(201,168,76,.06);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      width: 100%; max-width: 420px;
-      font-size: .78rem; color: var(--text-secondary);
-      line-height: 1.5;
-    }
-    .kid-first-notice .notice-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: .05rem; }
+    .age-card-item--wide { grid-column: 1 / -1; }
+    .age-card-item--disabled { opacity: .45; cursor: not-allowed; pointer-events: none; }
 
     /* Resume banner — appears if prior session detected */
     .resume-banner {
@@ -194,8 +183,7 @@
     <!-- Hero -->
     <div class="hero anim-slide-up">
       <h1 class="anim-shimmer">Who's Playing?</h1>
-      <p>Each age group has their own special game!<br>
-         <strong style="color:var(--gold-soft)">Kids go first 🍼</strong></p>
+      <p>Each age group has their own special game!</p>
     </div>
 
     <!-- Shown only while we're waiting on the first party-state poll -->
@@ -271,19 +259,25 @@
           🔮 Baby predictions<br>
           💡 How much do you know?<br>
           🎟️ Win a secret letter<br>
-          🔑 Kid plays first on shared phones
+          🏆 Beat your friends!
         </span>
       </div>
 
-    </div>
+      <div class="age-card-item anim-slide-up anim-delay-3 age-card-item--wide age-card-item--disabled"
+           role="listitem" tabindex="-1"
+           id="guessCard"
+           onclick="openGuess()"
+           onkeydown="if(event.key==='Enter')openGuess()"
+           aria-disabled="true"
+           aria-label="The Big Guess — live guessing game, hosted from the TV">
+        <span class="card-emoji" aria-hidden="true">🎯</span>
+        <span class="card-name">The Big Guess</span>
+        <span class="card-range">Everyone — hosted live from the TV</span>
+        <span class="card-perks" id="guessCardNote">
+          Coming soon — host will enable this
+        </span>
+      </div>
 
-    <!-- Kid-first notice -->
-    <div class="kid-first-notice anim-fade-in" id="kidFirstNotice">
-      <span class="notice-icon">💡</span>
-      <span>
-        <strong style="color:var(--gold-soft)">Sharing this phone?</strong>
-        Let a little one play first — it unlocks adult voucher eligibility!
-      </span>
     </div>
 
   </main>
@@ -310,7 +304,6 @@
   <div class="toast-container" id="toastContainer" aria-live="polite"></div>
 
   <script type="module">
-    import DeviceManager  from '../js/core/device.js';
     import SessionManager from '../js/core/session.js';
     import PartyState     from '../js/core/state.js';
     import API            from '../js/core/api.js';
@@ -354,8 +347,35 @@
       // Check for existing sessions on this device
       loadExistingSessions();
 
-      // Update kid-first notice
-      updateKidFirstNotice();
+      // Poll whether the host has enabled/started The Big Guess
+      refreshGuessCard();
+      setInterval(refreshGuessCard, 5000);
+    };
+
+    // ─── THE BIG GUESS ────────────────────────────────────────
+    // Standalone live guessing game, gated by admin (not by age group or
+    // voucher eligibility) — see workers/poll-engine.js + pages/guess.html.
+
+    const refreshGuessCard = async () => {
+      const res = await API.poll.state();
+      if (!res.success) return;
+
+      const enabled = res.status !== 'disabled';
+      const card = document.getElementById('guessCard');
+      const note = document.getElementById('guessCardNote');
+      card.classList.toggle('age-card-item--disabled', !enabled);
+      card.tabIndex = enabled ? 0 : -1;
+      card.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+      note.textContent =
+        res.status === 'complete' ? 'Finished — tap to see the results' :
+        res.status === 'active'   ? 'Live now — tap to join!' :
+        res.status === 'ready'    ? 'Starting soon...' :
+        'Coming soon — host will enable this';
+    };
+
+    window.openGuess = () => {
+      if (document.getElementById('guessCard').classList.contains('age-card-item--disabled')) return;
+      window.location.href = 'guess.html';
     };
 
     // ─── EXISTING SESSIONS ────────────────────────────────────
@@ -395,22 +415,6 @@
       banner.classList.add('visible');
     };
 
-    // ─── KID-FIRST NOTICE ─────────────────────────────────────
-
-    const updateKidFirstNotice = () => {
-      const kidPlayed = SessionManager.kidPlayedOnDevice();
-      const notice    = document.getElementById('kidFirstNotice');
-      if (kidPlayed) {
-        notice.innerHTML = `
-          <span class="notice-icon">✅</span>
-          <span><strong style="color:var(--success)">Kid played first!</strong>
-          Adult voucher eligibility is now unlocked on this phone 🎟️</span>
-        `;
-        notice.style.borderColor = 'rgba(102,187,106,0.3)';
-        notice.style.background  = 'rgba(102,187,106,0.06)';
-      }
-    };
-
     // ─── AGE SELECTION ────────────────────────────────────────
 
     window.selectAge = async (ageGroup) => {
@@ -422,19 +426,6 @@
         log.info('Blocked by cooldown', { ageGroup, cooldownMs });
         showCooldown(cooldownMs);
         return;
-      }
-
-      // Check adult requires kid first
-      if (['adult', 'teen'].includes(ageGroup)) {
-        const kidPlayed = SessionManager.kidPlayedOnDevice();
-        // Note: adults CAN play without kid first — they just won't be
-        // eligible for vouchers. The server enforces this.
-        // We only block if device already used 1 voucher AND no kid
-        const deviceData = DeviceManager.getLocalDeviceData();
-        if (deviceData.vouchersIssued >= 1 && !kidPlayed) {
-          showToast('Let a little one play first on this phone! 🍼');
-          return;
-        }
       }
 
       // Animate card selection

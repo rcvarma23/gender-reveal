@@ -1,7 +1,9 @@
 /**
  * GAME — Balloon Pop (toddler)
  * Tap floating balloons before they drift off-screen.
- * Completes at balloonsToWin popped OR gameDurationSec elapsed.
+ * Always runs the full gameDurationSec, however many get popped — spawn
+ * rate/count ramps up in tiers (config.spawnTiers) so it starts calm and
+ * gets noticeably busier partway through.
  */
 
 export default function createGame(container, config, callbacks) {
@@ -12,6 +14,7 @@ export default function createGame(container, config, callbacks) {
   let durationTimer = null;
   let elapsed = 0;
   let ended = false;
+  let currentTier = null;
   const balloons = new Set();
 
   const stageEl = document.createElement('div');
@@ -28,6 +31,17 @@ export default function createGame(container, config, callbacks) {
   const updateCount = () => { countEl.textContent = `🎈 ${popped} popped!`; };
   updateCount();
   stageEl.appendChild(countEl);
+
+  const timerEl = document.createElement('div');
+  timerEl.style.cssText = `
+    position:absolute; top:.5rem; right:.5rem; z-index:2;
+    font-family: var(--font-display, serif); font-size:1rem; font-weight:700;
+    color: var(--gold-bright, #FFD700); background: rgba(8,7,23,.55);
+    padding:.3rem .8rem; border-radius: var(--radius-full, 999px);
+  `;
+  const updateTimer = () => { timerEl.textContent = `⏱ ${Math.max(0, config.gameDurationSec - elapsed)}s`; };
+  updateTimer();
+  stageEl.appendChild(timerEl);
 
   const spawnBalloon = () => {
     if (ended) return;
@@ -60,11 +74,34 @@ export default function createGame(container, config, callbacks) {
       popped++;
       cleanup();
       updateCount();
-      callbacks.onProgress(Math.min(100, Math.round((popped / config.balloonsToWin) * 100)));
-      // Never end the game before minPlaySec, even if the pop target is
-      // already hit — the kid should get to keep popping balloons.
-      if (popped >= config.balloonsToWin && elapsed >= (config.minPlaySec || 0)) finish();
+      // No pop target — the game only ends when time runs out, so kids
+      // can pop as many (or as few) balloons as they want.
+      callbacks.onProgress(Math.min(100, Math.round((elapsed / config.gameDurationSec) * 100)));
     });
+  };
+
+  // config.spawnTiers is a list of { afterSec, intervalMs, count } sorted
+  // ascending by afterSec — pick the last tier whose afterSec has passed.
+  // Lets the game start calm and then get noticeably busier at a given
+  // mark (e.g. a lot more balloons right after the first 10 seconds).
+  const tierForElapsed = () => {
+    let tier = config.spawnTiers[0];
+    for (const t of config.spawnTiers) {
+      if (elapsed >= t.afterSec) tier = t;
+    }
+    return tier;
+  };
+
+  const spawnTick = () => {
+    for (let i = 0; i < (currentTier.count || 1); i++) spawnBalloon();
+  };
+
+  const rescheduleSpawnIfNeeded = () => {
+    const nextTier = tierForElapsed();
+    if (nextTier === currentTier) return;
+    currentTier = nextTier;
+    clearInterval(spawnTimer);
+    spawnTimer = setInterval(spawnTick, currentTier.intervalMs);
   };
 
   const finish = () => {
@@ -77,9 +114,12 @@ export default function createGame(container, config, callbacks) {
 
   return {
     start() {
-      spawnTimer = setInterval(spawnBalloon, config.spawnIntervalMs);
+      currentTier = tierForElapsed();
+      spawnTimer = setInterval(spawnTick, currentTier.intervalMs);
       durationTimer = setInterval(() => {
         elapsed++;
+        updateTimer();
+        rescheduleSpawnIfNeeded();
         if (elapsed >= config.gameDurationSec) finish();
       }, 1000);
       spawnBalloon();

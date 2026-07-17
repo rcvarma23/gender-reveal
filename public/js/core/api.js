@@ -63,7 +63,7 @@ const API = (() => {
   const session = {
     /**
      * Register new player session on server
-     * Server validates: cooldown, device cap, kid-first gate
+     * Server validates: cooldown, device cap
      */
     create: (sessionId, ageGroup) =>
       post('/session/create', { sessionId, ageGroup }),
@@ -179,6 +179,24 @@ const API = (() => {
      */
     resetParty: (token) =>
       post('/admin/reset-party', { confirm: true }, { 'X-Admin-Token': token }),
+
+    /**
+     * Opinion Poll — un-gray the adult game card
+     */
+    pollEnable: (token) =>
+      post('/admin/poll/enable', {}, { 'X-Admin-Token': token }),
+
+    /**
+     * Opinion Poll — begin question 1 (server-timed from here on)
+     */
+    pollStart: (token) =>
+      post('/admin/poll/start', {}, { 'X-Admin-Token': token }),
+
+    /**
+     * Opinion Poll — clear votes/results, back to disabled
+     */
+    pollReset: (token) =>
+      post('/admin/poll/reset', {}, { 'X-Admin-Token': token }),
   };
 
   // ─── COUPLE GAME ───────────────────────────────────────────
@@ -210,6 +228,28 @@ const API = (() => {
       get('/couple/status', { 'X-Couple-Token': token }),
   };
 
+  // ─── OPINION POLL ──────────────────────────────────────────
+
+  const poll = {
+    /**
+     * Current poll status/phase/question/timer — guests + host TV poll this
+     */
+    state: () =>
+      get('/poll/state'),
+
+    /**
+     * Cast a vote for the active question (1 per device per question)
+     */
+    vote: (questionIndex, choiceIndex) =>
+      post('/poll/vote', { questionIndex, choiceIndex }),
+
+    /**
+     * Final per-question results, once the poll is complete
+     */
+    final: () =>
+      get('/poll/final'),
+  };
+
   // ─── PUBLIC API ────────────────────────────────────────────
 
   return {
@@ -219,6 +259,7 @@ const API = (() => {
     stickers,
     admin,
     couple,
+    poll,
   };
 
 })();

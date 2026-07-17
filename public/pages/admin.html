@@ -143,6 +143,7 @@
         <div class="stat-tile"><div class="stat-tile__value" id="statWinners">0/10</div><div class="stat-tile__label">Vouchers Drawn</div></div>
         <div class="stat-tile"><div class="stat-tile__value" id="statLetters">0/10</div><div class="stat-tile__label">Letters Revealed</div></div>
         <div class="stat-tile"><div class="stat-tile__value" id="statAttempts">0/3</div><div class="stat-tile__label">Couple Attempts</div></div>
+        <div class="stat-tile"><div class="stat-tile__value" id="statPoll">Disabled</div><div class="stat-tile__label">The Big Guess</div></div>
       </div>
     </div>
 
@@ -182,6 +183,26 @@
           <span><span class="ctrl-btn__label">🗑️ RESET PARTY</span><br><span class="ctrl-btn__sub">Wipe back to Waiting</span></span>
         </button>
       </div>
+    </div>
+
+    <!-- The Big Guess -->
+    <div class="section">
+      <div class="section-title">The Big Guess</div>
+      <div class="ctrl-grid">
+        <button class="ctrl-btn" onclick="pollEnable()">
+          <span><span class="ctrl-btn__label">🎯 Enable</span><br><span class="ctrl-btn__sub">Un-gray its tile for everyone</span></span>
+        </button>
+        <button class="ctrl-btn ctrl-btn--success" onclick="pollStart()">
+          <span><span class="ctrl-btn__label">▶️ Start</span><br><span class="ctrl-btn__sub">Begin question 1 (30s each)</span></span>
+        </button>
+        <button class="ctrl-btn ctrl-btn--danger" onclick="pollReset()">
+          <span><span class="ctrl-btn__label">🔁 Reset</span><br><span class="ctrl-btn__sub">Clear guesses, back to disabled</span></span>
+        </button>
+      </div>
+      <p style="color:var(--text-muted);font-size:.8rem;margin-top:.6rem">
+        Open <a href="poll-host.html" target="_blank" style="color:var(--gold-soft)">poll-host.html</a>
+        on the TV/laptop display before pressing Start.
+      </p>
     </div>
 
     <!-- Letter board -->
@@ -315,6 +336,7 @@
       document.getElementById('statWinners').textContent = `${d.winnersCount}/${d.totalVouchers}`;
       document.getElementById('statLetters').textContent = `${d.lettersRevealedCount}/${d.totalVouchers}`;
       document.getElementById('statAttempts').textContent = `${d.coupleAttempts}/3`;
+      document.getElementById('statPoll').textContent = d.pollStatus.charAt(0).toUpperCase() + d.pollStatus.slice(1);
 
       // Letter board
       const board = document.getElementById('letterBoard');
@@ -425,6 +447,26 @@
     window.forceRevealVoucher = async (voucherCode) => {
       const res = await API.admin.forceReveal(voucherCode, getToken());
       showToast(res.success ? `✅ Revealed letter "${res.letter}"` : (res.error || 'Failed'), res.success ? 'success' : 'error');
+      refreshStats();
+    };
+
+    window.pollEnable = async () => {
+      const res = await API.admin.pollEnable(getToken());
+      showToast(res.success ? '🎯 The Big Guess enabled for everyone' : (res.error || 'Failed'), res.success ? 'success' : 'error');
+      refreshStats();
+    };
+
+    window.pollStart = async () => {
+      if (!confirm('Start The Big Guess now? Make sure the TV display (poll-host.html) is already open.')) return;
+      const res = await API.admin.pollStart(getToken());
+      showToast(res.success ? '▶️ The Big Guess started!' : (res.error || 'Failed'), res.success ? 'success' : 'error');
+      refreshStats();
+    };
+
+    window.pollReset = async () => {
+      if (!confirm('Reset The Big Guess? This clears all guesses.')) return;
+      const res = await API.admin.pollReset(getToken());
+      showToast(res.success ? '🔁 The Big Guess reset' : (res.error || 'Failed'), res.success ? 'success' : 'error');
       refreshStats();
     };
 

@@ -17,14 +17,22 @@ const GAME_CONFIG = {
     tapTargetPx:     100,        // huge targets for small fingers
 
     'balloon-pop': {
-      balloonsTotal:   10,
-      balloonsToWin:   8,        // pop 8 to complete...
-      minPlaySec:      45,       // ...but never finish before 45s of play
-      spawnIntervalMs: 800,
-      balloonSpeedMin: 0.4,
-      balloonSpeedMax: 0.9,
-      balloonSizePx:   90,
+      // No pop target — always runs the full 60s, timer visible, kid pops
+      // as many balloons as they want. Spawn tiers: calm for the first
+      // 10s, then a noticeable jump in both speed and how many spawn per
+      // tick, ramping further from there.
       gameDurationSec: 60,
+      spawnTiers: [
+        { afterSec: 0,  intervalMs: 1100, count: 1 },  // calm start
+        { afterSec: 10, intervalMs: 500,  count: 2 },  // after 10s: lots more balloons
+        { afterSec: 20, intervalMs: 420,  count: 2 },
+        { afterSec: 30, intervalMs: 350,  count: 3 },
+        { afterSec: 40, intervalMs: 300,  count: 3 },
+        { afterSec: 50, intervalMs: 260,  count: 3 },
+      ],
+      balloonSpeedMin: 0.6,
+      balloonSpeedMax: 1.2,
+      balloonSizePx:   90,
     },
 
     'feed-baby': {
@@ -81,7 +89,7 @@ const GAME_CONFIG = {
     showTimer:       true,
     minCompleteSecs: 30,
     tapTargetPx:     48,
-    cooldownMs:      2.5 * 60 * 1000,
+    cooldownMs:      60 * 1000,
 
     'baby-trivia': {
       questionCount:   10,
@@ -126,8 +134,9 @@ const GAME_CONFIG = {
     showTimer:       true,
     minCompleteSecs: 45,
     tapTargetPx:     52,
-    cooldownMs:      3 * 60 * 1000,
-    requiresKidFirst: true,       // kid must play on same device first
+    cooldownMs:      60 * 1000,
+    // requiresKidFirst removed — any adult who plays is voucher-eligible
+    // regardless of whether a kid played on the same device first
 
     'predictions-quiz': {
       questionCount:   8,

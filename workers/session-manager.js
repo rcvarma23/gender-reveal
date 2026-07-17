@@ -12,12 +12,18 @@
  *   Layer 2 — Speed validation (too fast = disqualified)
  *   Layer 3 — Device cooldown (3 min between adult sessions)
  *   Layer 5 — Fingerprint matching (incognito detection)
- *   Layer 7 — Kid-played-first gate (adult voucher eligibility)
+ *
+ * (Removed) Layer 7 — kid-played-first gate for adult voucher eligibility.
+ * Any adult who plays and clears speed/tab-farming checks is now eligible,
+ * regardless of whether a kid played on the same device first. Admin
+ * triggers the winner draw manually whenever they choose.
  */
 
+// Must match COOLDOWNS in public/js/core/session.js and cooldownMs in
+// public/config/game-config.js — this copy is the enforced source of truth.
 const COOLDOWNS = {
-  adult:   3 * 60 * 1000,
-  teen:    2.5 * 60 * 1000,
+  adult:   60 * 1000,
+  teen:    60 * 1000,
   kid:     0,
   toddler: 0,
 };
@@ -175,16 +181,11 @@ export default {
       let voucherEligible    = false;
       let disqualifyReason   = null;
 
-      // Kid-first gate is an ADULT-only rule (see CLAUDE.md guest table —
-      // only Adult lists "kid-first gate"; Teen does not), so teens must
-      // not be blocked by it.
       if (!isKid) {
         if (tooFast) {
           disqualifyReason = 'speed';
         } else if (farmed) {
           disqualifyReason = 'tab_farming';
-        } else if (sessionData.ageGroup === 'adult' && !deviceData?.kidPlayedFirst) {
-          disqualifyReason = 'no_kid_first';
         } else {
           voucherEligible = true;
         }

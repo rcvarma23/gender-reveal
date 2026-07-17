@@ -17,9 +17,22 @@
     body { background: var(--navy-deepest); overflow-x: hidden; }
     .page-inner { position: relative; z-index: 2; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1.5rem 1.25rem 3rem; gap: 1.25rem; text-align: center; }
     .headline { font-family: var(--font-display); font-size: 1.3rem; color: var(--gold-soft); }
+    .subline { font-size: .8rem; color: var(--text-muted); max-width: 300px; }
     .attempt-label { font-size: .85rem; color: var(--text-muted); }
     .timer { font-size: 1.5rem; font-weight: 700; color: var(--gold-bright); }
     .timer.warn { animation: timerPulse 1s infinite; }
+
+    /* Stage progress dots, shown above every stage */
+    .stage-dots { display: flex; gap: .5rem; align-items: center; }
+    .stage-dot {
+      width: 1.6rem; height: 1.6rem; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: .7rem; font-weight: 700; border: 1.5px solid var(--border-subtle); color: var(--text-muted);
+    }
+    .stage-dot.done    { background: var(--gold-warm); border-color: var(--gold-warm); color: var(--navy-deepest); }
+    .stage-dot.current { border-color: var(--gold-bright); color: var(--gold-bright); box-shadow: 0 0 8px rgba(255,215,0,0.4); }
+    .stage-dot-sep { width: 1.25rem; height: 1.5px; background: var(--border-subtle); }
+
+    /* Word Scramble / Puzzle Assembly (shared slot+tray mechanic) */
     .slots-row { display: flex; gap: .4rem; flex-wrap: wrap; justify-content: center; max-width: 380px; }
     .slot {
       width: 2.6rem; height: 3.1rem; display: flex; align-items: center; justify-content: center;
@@ -37,8 +50,49 @@
       cursor: pointer;
     }
     .tile.used { visibility: hidden; }
+    /* Stage 3 gets a jigsaw-piece silhouette instead of a plain square */
+    .tile.piece, .slot.piece-slot {
+      clip-path: polygon(
+        0% 20%, 20% 20%, 20% 0%, 80% 0%, 80% 20%, 100% 20%,
+        100% 80%, 80% 80%, 80% 100%, 20% 100%, 20% 80%, 0% 80%
+      );
+      border-radius: 0;
+    }
     .feedback { font-size: .9rem; color: var(--text-muted); min-height: 1.4rem; }
-    #videoSection, #genderSection, #autoCompleteSection { display: none; }
+
+    /* Memory Match's Question Banner — the target phrase, shown openly */
+    .question-banner {
+      font-family: var(--font-display); font-size: 1.1rem; letter-spacing: .18em;
+      color: var(--navy-deepest); font-weight: 700;
+      background: linear-gradient(180deg, #E9CE7D, var(--gold-warm));
+      padding: .5rem 1rem; border-radius: var(--radius-md);
+      box-shadow: 0 2px 0 rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.5);
+    }
+
+    /* Memory Match */
+    .memory-grid {
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: .5rem;
+      max-width: 380px; perspective: 600px;
+    }
+    .memory-card {
+      width: 3rem; height: 3.4rem; border-radius: var(--radius-md); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.15rem; font-weight: 700;
+      border: 1.5px solid rgba(255,255,255,.15); background: var(--navy-mid,#2a2660); color: var(--text-primary);
+      transition: background .2s ease, border-color .2s ease;
+    }
+    .memory-card.flipping { animation: cardFlip .5s ease; }
+    .memory-card.flipped {
+      border-color: var(--border-gold); background: var(--navy-card); color: var(--gold-soft);
+    }
+    .memory-card.matched {
+      border-color: var(--gold-warm); background: rgba(201,168,76,0.18); color: var(--gold-bright);
+      cursor: default; box-shadow: 0 0 8px rgba(201,168,76,0.35);
+    }
+
+    #stage1Section, #stage2Section, #stage3Section,
+    #autoCompleteSection, #transitionSection,
+    #videoSection, #genderSection { display: none; }
     #revealVideo { width: 100%; max-width: 360px; border-radius: var(--radius-lg); }
     .gender-buttons { display: flex; gap: 1rem; }
     .gender-btn { font-size: 1.1rem; padding: 1rem 1.5rem; border-radius: var(--radius-full); border: 1.5px solid var(--border-subtle); cursor: pointer; font-family: var(--font-body); font-weight: 600; }
@@ -49,17 +103,47 @@
 <body>
   <main class="page-inner">
 
-    <div id="puzzleSection">
-      <div class="headline">Arrange the letters in order</div>
-      <div class="attempt-label" id="attemptLabel"></div>
-      <div class="timer" id="timerLabel"></div>
-      <div class="slots-row" id="slotsRow" style="margin-top:.5rem"></div>
-      <div class="tray-row" id="trayRow" style="margin-top:1rem"></div>
-      <div class="feedback" id="feedback"></div>
+    <div class="stage-dots" id="stageDots"></div>
+
+    <!-- Stage 1: Word Scramble -->
+    <div id="stage1Section">
+      <div class="headline">🔤 Word Scramble</div>
+      <div class="subline">Arrange the letters in the correct order</div>
+      <div class="attempt-label" id="s1AttemptLabel"></div>
+      <div class="timer" id="s1TimerLabel"></div>
+      <div class="slots-row" id="s1SlotsRow" style="margin-top:.5rem"></div>
+      <div class="tray-row" id="s1TrayRow" style="margin-top:1rem"></div>
+      <div class="feedback" id="s1Feedback"></div>
+    </div>
+
+    <!-- Stage 2: Memory Match -->
+    <div id="stage2Section">
+      <div class="headline">🧠 Memory Match</div>
+      <div class="subline">Flip two cards at a time — match each letter to its correct position</div>
+      <div class="question-banner" id="questionBanner"></div>
+      <div class="attempt-label" id="s2AttemptLabel"></div>
+      <div class="timer" id="s2TimerLabel"></div>
+      <div class="memory-grid" id="memoryGrid" style="margin-top:.75rem"></div>
+      <div class="feedback" id="s2Feedback"></div>
+    </div>
+
+    <!-- Stage 3: Puzzle Assembly -->
+    <div id="stage3Section">
+      <div class="headline">🧩 Puzzle Assembly</div>
+      <div class="subline">Piece the letters together in the correct order</div>
+      <div class="attempt-label" id="s3AttemptLabel"></div>
+      <div class="timer" id="s3TimerLabel"></div>
+      <div class="slots-row" id="s3SlotsRow" style="margin-top:.5rem"></div>
+      <div class="tray-row" id="s3TrayRow" style="margin-top:1rem"></div>
+      <div class="feedback" id="s3Feedback"></div>
+    </div>
+
+    <div id="transitionSection">
+      <div class="headline" id="transitionHeadline"></div>
     </div>
 
     <div id="autoCompleteSection">
-      <div class="headline">Final attempt — unlocking the code for you! ✨</div>
+      <div class="headline" id="autoHeadline">Final attempt — solving it for you! ✨</div>
       <div class="slots-row" id="autoSlotsRow" style="margin-top:1rem"></div>
     </div>
 
@@ -89,75 +173,57 @@
     const token = localStorage.getItem(TOKEN_KEY);
     if (!token) window.location.href = 'couple.html';
 
-    const puzzleSection       = document.getElementById('puzzleSection');
+    const stageDots           = document.getElementById('stageDots');
+    const stage1Section       = document.getElementById('stage1Section');
+    const stage2Section       = document.getElementById('stage2Section');
+    const stage3Section       = document.getElementById('stage3Section');
+    const transitionSection   = document.getElementById('transitionSection');
     const autoCompleteSection = document.getElementById('autoCompleteSection');
     const videoSection        = document.getElementById('videoSection');
     const genderSection       = document.getElementById('genderSection');
 
-    let slots = [];       // { letter: string|null, locked: bool }
-    let tray  = [];        // remaining letter tiles available to place
+    const STAGE_NAMES = { 1: 'Word Scramble', 2: 'Memory Match', 3: 'Puzzle Assembly' };
+
     let timerInterval = null;
     let submitted = false;
 
     const showSection = (name) => {
-      puzzleSection.style.display       = name === 'puzzle'       ? 'block' : 'none';
-      autoCompleteSection.style.display = name === 'auto'          ? 'block' : 'none';
-      videoSection.style.display        = name === 'video'         ? 'block' : 'none';
-      genderSection.style.display       = name === 'gender'        ? 'block' : 'none';
+      stage1Section.style.display       = name === 'stage1'     ? 'block' : 'none';
+      stage2Section.style.display       = name === 'stage2'     ? 'block' : 'none';
+      stage3Section.style.display       = name === 'stage3'     ? 'block' : 'none';
+      transitionSection.style.display   = name === 'transition' ? 'block' : 'none';
+      autoCompleteSection.style.display = name === 'auto'       ? 'block' : 'none';
+      videoSection.style.display        = name === 'video'      ? 'block' : 'none';
+      genderSection.style.display       = name === 'gender'     ? 'block' : 'none';
+      stageDots.style.display           = (name === 'video' || name === 'gender') ? 'none' : 'flex';
     };
 
-    const renderSlots = () => {
-      const row = document.getElementById('slotsRow');
-      row.innerHTML = '';
-      slots.forEach((slot, i) => {
-        const el = document.createElement('div');
-        el.className = 'slot' + (slot.letter ? ' filled' : '') + (slot.locked ? ' locked' : '');
-        el.textContent = slot.letter || '';
-        if (!slot.locked) {
-          el.addEventListener('click', () => {
-            if (!slot.letter) return;
-            tray.push(slot.letter);
-            slot.letter = null;
-            renderAll();
-          });
+    const renderStageDots = (stage) => {
+      stageDots.innerHTML = '';
+      [1, 2, 3].forEach((n, i) => {
+        if (i > 0) {
+          const sep = document.createElement('div');
+          sep.className = 'stage-dot-sep';
+          stageDots.appendChild(sep);
         }
-        row.appendChild(el);
+        const dot = document.createElement('div');
+        dot.className = 'stage-dot' + (n < stage ? ' done' : n === stage ? ' current' : '');
+        dot.textContent = n < stage ? '✓' : n;
+        stageDots.appendChild(dot);
       });
     };
-
-    const renderTray = () => {
-      const row = document.getElementById('trayRow');
-      row.innerHTML = '';
-      tray.forEach((letter, ti) => {
-        const el = document.createElement('div');
-        el.className = 'tile';
-        el.textContent = letter;
-        el.addEventListener('click', () => {
-          const nextSlot = slots.find(s => !s.locked && !s.letter);
-          if (!nextSlot) return;
-          nextSlot.letter = letter;
-          tray.splice(ti, 1);
-          renderAll();
-          if (slots.every(s => s.letter)) submitAttempt();
-        });
-        row.appendChild(el);
-      });
-    };
-
-    const renderAll = () => { renderSlots(); renderTray(); };
 
     const clearTimer = () => { if (timerInterval) clearInterval(timerInterval); timerInterval = null; };
 
-    const startTimer = (durationSec) => {
+    const startTimer = (durationSec, labelEl, onExpire) => {
       clearTimer();
       let remaining = durationSec;
-      const label = document.getElementById('timerLabel');
       const update = () => {
-        label.textContent = `⏱ ${remaining}s`;
-        label.classList.toggle('warn', remaining <= 10);
+        labelEl.textContent = `⏱ ${remaining}s`;
+        labelEl.classList.toggle('warn', remaining <= 10);
         if (remaining <= 0) {
           clearTimer();
-          submitAttempt(); // time's up — submit whatever we have
+          onExpire();
         }
         remaining--;
       };
@@ -165,10 +231,13 @@
       timerInterval = setInterval(update, 1000);
     };
 
-    const setupPuzzle = (letters, hints, durationSec, attemptNumber) => {
+    // ── Shared order-puzzle mechanic (Stage 1 scramble + Stage 3 assembly) ──
+    const setupOrderPuzzle = (opts) => {
+      const { letters, hints, durationSec, attemptNumber, pieceStyle,
+              slotsRowId, trayRowId, attemptLabelId, timerLabelId, feedbackId, sectionName } = opts;
       submitted = false;
       const pool = [...letters];
-      slots = letters.map((_, i) => ({ letter: null, locked: false }));
+      let slots = letters.map(() => ({ letter: null, locked: false }));
 
       hints.forEach(({ position, letter }) => {
         const idx = pool.indexOf(letter);
@@ -176,35 +245,164 @@
         slots[position] = { letter, locked: true };
       });
 
-      tray = pool.sort(() => Math.random() - 0.5);
-      document.getElementById('attemptLabel').textContent = `Attempt ${attemptNumber} of 3`;
-      document.getElementById('feedback').textContent = '';
+      let tray = pool.sort(() => Math.random() - 0.5);
+
+      const renderAll = () => {
+        const slotsRow = document.getElementById(slotsRowId);
+        slotsRow.innerHTML = '';
+        slots.forEach((slot) => {
+          const el = document.createElement('div');
+          el.className = 'slot' + (pieceStyle ? ' piece-slot' : '') + (slot.letter ? ' filled' : '') + (slot.locked ? ' locked' : '');
+          el.textContent = slot.letter || '';
+          if (!slot.locked) {
+            el.addEventListener('click', () => {
+              if (!slot.letter) return;
+              tray.push(slot.letter);
+              slot.letter = null;
+              renderAll();
+            });
+          }
+          slotsRow.appendChild(el);
+        });
+
+        const trayRow = document.getElementById(trayRowId);
+        trayRow.innerHTML = '';
+        tray.forEach((letter, ti) => {
+          const el = document.createElement('div');
+          el.className = 'tile' + (pieceStyle ? ' piece' : '');
+          el.textContent = letter;
+          el.addEventListener('click', () => {
+            const nextSlot = slots.find(s => !s.locked && !s.letter);
+            if (!nextSlot) return;
+            nextSlot.letter = letter;
+            tray.splice(ti, 1);
+            renderAll();
+            if (slots.every(s => s.letter)) doSubmit();
+          });
+          trayRow.appendChild(el);
+        });
+      };
+
+      const doSubmit = () => submitAttempt(() => slots.map(s => s.letter || ''), feedbackId, sectionName);
+
+      document.getElementById(attemptLabelId).textContent = `Attempt ${attemptNumber} of 3`;
+      document.getElementById(feedbackId).textContent = '';
       renderAll();
-      startTimer(durationSec);
-      showSection('puzzle');
+      startTimer(durationSec, document.getElementById(timerLabelId), doSubmit);
+      showSection(sectionName);
+
+      return { getGuess: () => slots.map(s => s.letter || '') };
     };
 
-    const submitAttempt = async () => {
+    // ── Stage 2: Memory Match ──
+    const setupMemoryMatch = (layout, hints, durationSec, attemptNumber) => {
+      submitted = false;
+      const solvedPositions = new Set(hints.map(h => h.position));
+      const positionSlots = Array(10).fill(null);
+      hints.forEach(h => { positionSlots[h.position] = h.letter; });
+
+      let flipped = [];
+      let busy = false;
+
+      const grid = document.getElementById('memoryGrid');
+
+      const render = () => {
+        grid.innerHTML = '';
+        layout.forEach((card) => {
+          const isPreMatched = solvedPositions.has(card.pairId);
+          const el = document.createElement('div');
+          el.className = 'memory-card' + (isPreMatched ? ' matched' : '');
+          el.textContent = isPreMatched ? card.value : '❔';
+          if (!isPreMatched) {
+            el.dataset.id = card.id;
+            el.addEventListener('click', () => handleFlip(card, el));
+          }
+          grid.appendChild(el);
+        });
+      };
+
+      const handleFlip = (card, el) => {
+        if (busy || el.classList.contains('flipped') || el.classList.contains('matched')) return;
+        if (flipped.length >= 2) return;
+
+        el.classList.add('flipping');
+        setTimeout(() => {
+          el.classList.remove('flipping');
+          el.classList.add('flipped');
+          el.textContent = card.value;
+        }, 250);
+
+        flipped.push({ card, el });
+
+        if (flipped.length === 2) {
+          busy = true;
+          setTimeout(() => {
+            const [a, b] = flipped;
+            if (a.card.pairId === b.card.pairId) {
+              a.el.classList.add('matched');
+              b.el.classList.add('matched');
+              const letterCard = a.card.type === 'letter' ? a.card : b.card;
+              positionSlots[a.card.pairId] = letterCard.value;
+              if (positionSlots.every(p => p !== null)) doSubmit();
+            } else {
+              [a, b].forEach(({ card, el }) => {
+                el.classList.add('flipping');
+                setTimeout(() => {
+                  el.classList.remove('flipping', 'flipped');
+                  el.textContent = '❔';
+                }, 250);
+              });
+            }
+            flipped = [];
+            busy = false;
+          }, 700);
+        }
+      };
+
+      const doSubmit = () => submitAttempt(() => positionSlots.map(p => p || ''), 's2Feedback', 'stage2');
+
+      document.getElementById('s2AttemptLabel').textContent = `Attempt ${attemptNumber} of 3`;
+      document.getElementById('s2Feedback').textContent = '';
+      render();
+      startTimer(durationSec, document.getElementById('s2TimerLabel'), doSubmit);
+      showSection('stage2');
+    };
+
+    // ── Submit / result handling (shared by all 3 stages) ──
+    const submitAttempt = async (getGuess, feedbackId, sectionName) => {
       if (submitted) return;
       submitted = true;
       clearTimer();
 
-      const guess = slots.map(s => s.letter || '');
+      const guess = getGuess();
       const result = await API.couple.attempt({ guess }, token);
 
       if (!result.success) {
-        document.getElementById('feedback').textContent = result.error || 'Something went wrong';
+        document.getElementById(feedbackId).textContent = result.error || 'Something went wrong';
         submitted = false;
         return;
       }
 
       if (result.won) {
-        goToVideo();
+        if (result.finalStage) {
+          goToVideo();
+        } else {
+          showStageTransition(result.completedStage, result.nextStage);
+        }
         return;
       }
 
-      document.getElementById('feedback').textContent = `Not quite — ${result.attemptsRemaining} attempt(s) left. Try again!`;
+      document.getElementById(feedbackId).textContent = `Not quite — ${result.attemptsRemaining} attempt(s) left. Try again!`;
       setTimeout(() => loadStatus(), 1500);
+    };
+
+    const showStageTransition = (completedStage, nextStage) => {
+      Confetti.burst({ palette: 'gold', count: 40 });
+      renderStageDots(nextStage);
+      document.getElementById('transitionHeadline').textContent =
+        `🎉 ${STAGE_NAMES[completedStage]} solved! Next up: ${STAGE_NAMES[nextStage]}`;
+      showSection('transition');
+      setTimeout(() => loadStatus(), 2000);
     };
 
     const goToVideo = () => {
@@ -259,19 +457,50 @@
         return;
       }
 
+      renderStageDots(status.stage);
+
       if (status.attemptInProgress === 3) {
-        // Attempt 3 always auto-completes — no need to make them play it out
+        // Attempt 3 always auto-completes — no need to make them play it out.
+        // By attempt 3, hints cover the full code regardless of stage.
         showSection('auto');
+        document.getElementById('autoHeadline').textContent =
+          `✨ Final attempt — solving ${STAGE_NAMES[status.stage]} for you!`;
+        const guess = Array(status.wordLength || 10).fill('');
+        (status.hints || []).forEach(h => { guess[h.position] = h.letter; });
         const row = document.getElementById('autoSlotsRow');
-        row.innerHTML = (status.puzzleLetters || []).map(l => `<div class="slot filled">${l}</div>`).join('');
+        row.innerHTML = guess.map(l => `<div class="slot filled">${l}</div>`).join('');
         setTimeout(async () => {
-          const result = await API.couple.attempt({ guess: status.puzzleLetters || [] }, token);
-          if (result.won) goToVideo();
+          const result = await API.couple.attempt({ guess }, token);
+          if (result.won) {
+            if (result.finalStage) goToVideo();
+            else showStageTransition(result.completedStage, result.nextStage);
+          }
         }, 1800);
         return;
       }
 
-      setupPuzzle(status.puzzleLetters || [], status.hints || [], status.durationSec || 60, status.attemptInProgress);
+      if (status.stage === 1) {
+        setupOrderPuzzle({
+          letters: status.puzzleLetters || [], hints: status.hints || [],
+          durationSec: status.durationSec || 60, attemptNumber: status.attemptInProgress,
+          pieceStyle: false,
+          slotsRowId: 's1SlotsRow', trayRowId: 's1TrayRow',
+          attemptLabelId: 's1AttemptLabel', timerLabelId: 's1TimerLabel',
+          feedbackId: 's1Feedback', sectionName: 'stage1',
+        });
+      } else if (status.stage === 2) {
+        document.getElementById('questionBanner').textContent = (status.bannerWord || '').split('').join(' ');
+        setupMemoryMatch(status.memoryLayout || [], status.hints || [], status.durationSec || 90, status.attemptInProgress);
+      } else if (status.stage === 3) {
+        setupOrderPuzzle({
+          letters: status.assemblyLetters || [], hints: status.hints || [],
+          durationSec: status.durationSec || 60, attemptNumber: status.attemptInProgress,
+          pieceStyle: true,
+          slotsRowId: 's3SlotsRow', trayRowId: 's3TrayRow',
+          attemptLabelId: 's3AttemptLabel', timerLabelId: 's3TimerLabel',
+          feedbackId: 's3Feedback', sectionName: 'stage3',
+        });
+      }
     };
 
     loadStatus();

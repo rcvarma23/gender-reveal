@@ -48,7 +48,9 @@ gender-reveal/
 │   │
 │   ├── pages/
 │   │   ├── index.html               ✅ DONE — Waiting screen (celestial starfield)
-│   │   ├── play.html                ✅ DONE — Age group selector
+│   │   ├── play.html                ✅ DONE — Age group selector + 5th standalone
+│   │   │                               "The Big Guess" tile (not an age group; admin
+│   │   │                               enable/start-gated, links to guess.html)
 │   │   ├── game-toddler.html        ✅ DONE — Balloon pop + feed baby
 │   │   ├── game-kid.html            ✅ DONE — Emoji match + scramble
 │   │   ├── game-teen.html           ✅ DONE — Trivia + hard scramble, one turn only
@@ -62,7 +64,13 @@ gender-reveal/
 │   │   ├── couple.html              ✅ DONE — PIN entry + collected-letters check
 │   │   ├── couple-game.html         ✅ DONE — Timed letter puzzle + video + gender confirm
 │   │   ├── reveal.html              ✅ DONE — Gender flood screen + secret sticker unlock
-│   │   └── admin.html               ✅ DONE — Admin control panel
+│   │   ├── admin.html               ✅ DONE — Admin control panel (incl. The Big Guess controls)
+│   │   ├── guess.html               ✅ DONE — Guest-facing "The Big Guess" live guessing
+│   │   │                               game; standalone, no age group/session dependency,
+│   │   │                               reachable via play.html's 5th tile
+│   │   └── poll-host.html           ✅ DONE — TV/laptop display for the live "Big Guess";
+│   │                                   admin opens this manually, no PIN gate (read-only,
+│   │                                   just renders GET /api/poll/state)
 │   │
 │   ├── css/
 │   │   ├── theme.css                ✅ DONE — Design tokens, typography
@@ -100,7 +108,10 @@ gender-reveal/
 │   │   │       (couple's letter puzzle lives inline in couple-game.html, not a
 │   │   │        separate games/ module — it's tightly coupled to attempt/hint
 │   │   │        state from the couple-game.js Worker, unlike the replayable
-│   │   │        mini-games above)
+│   │   │        mini-games above. The Big Guess follows the same pattern —
+│   │   │        inline in guess.html + poll-host.html, not a games/ module,
+│   │   │        since it's a synced multi-question live event driven by
+│   │   │        server timestamps rather than a single playthrough)
 │   │   │
 │   │   └── admin/                   ⚠️ SKIPPED — logic lives inline in admin.html
 │   │       ├── dashboard.js             (matches index.html/play.html precedent
@@ -122,8 +133,9 @@ gender-reveal/
     ├── session-manager.js           ✅ DONE — W2: /api/session/*
     ├── voucher-engine.js            ✅ DONE — W3: /api/voucher/*
     ├── sticker-system.js            ✅ DONE — W4: /api/sticker/*
-    ├── admin-controls.js            ✅ DONE — W5: /api/admin/*
-    └── couple-game.js               ✅ DONE — W6: /api/couple/*
+    ├── admin-controls.js            ✅ DONE — W5: /api/admin/* (incl. /api/admin/poll/*)
+    ├── couple-game.js               ✅ DONE — W6: /api/couple/*
+    └── poll-engine.js               ✅ DONE — W7: /api/poll/* (live Opinion Poll)
 ```
 
 ---
@@ -173,10 +185,20 @@ gender-reveal/
 |-------|-----|-------|--------|-------|
 | Toddler | 0–5 | Balloon pop, Feed baby | Stickers ⭐ | No timer shown, replay forever |
 | Kid | 5–10 | Emoji match, Scramble | Stickers ⭐ | Replay forever |
-| Teen | 10–18 | Trivia, Hard scramble | Voucher 🎟️ | 1 turn, 2.5-min cooldown |
-| Adult | 20+ | Predictions quiz | Voucher 🎟️ | 1 turn, 3-min cooldown, kid-first gate |
+| Teen | 10–18 | Trivia, Hard scramble | Voucher 🎟️ | 1 turn, 60s cooldown |
+| Adult | 20+ | Predictions quiz | Voucher 🎟️ | 1 turn, 60s cooldown |
 
-**Kid-first gate:** Adults only get voucher eligibility AFTER a kid plays on the same phone.
+**No kid-first gate:** Removed — any adult who plays and clears speed/tab-farming checks is
+voucher-eligible immediately, regardless of whether a kid played on the same device first.
+Admin manually triggers the winner draw whenever they choose (typically ~10–15 min into the
+party) so it doesn't matter who played in what order.
+
+**The Big Guess (all ages, admin-triggered):** A separate live guessing game, not a voucher
+game — its own tile on `play.html` (outside the four age-group cards), grayed out until the
+admin presses "Enable"; guessing only opens once the admin presses "Start". 7 questions, 30s
+to guess + 10s to see results, auto-advancing off a server timestamp (`workers/poll-engine.js`,
+internal key/route names still say "poll") so every phone and the TV host display
+(`pages/poll-host.html`) stay in sync without a manual "next" click. Lives at `pages/guess.html`.
 
 ---
 
@@ -194,11 +216,11 @@ gender-reveal/
 |-------|----------------|
 | 1 | Session lock — completed sessions cannot replay |
 | 2 | Speed check — too fast = silently disqualified |
-| 3 | Device cooldown — 3 min adults, 2.5 min teens |
+| 3 | Device cooldown — 60s adults, 60s teens |
 | 4 | Tab farming — BroadcastChannel detects parallel tabs |
 | 5 | Fingerprinting — survives incognito/cache clear |
 | 6 | Device cap — max 1 voucher per physical device |
-| 7 | Kid-first gate — adult voucher requires prior kid play |
+| 7 | *(removed)* — kid-first gate. Adults no longer need a kid to have played first on the same device |
 | 8 | Global pool cap — atomic KV write, hard limit 10 |
 
 **Principle: Cheaters are silently disqualified, never told why. Looks like bad luck.**
@@ -228,9 +250,9 @@ Each physical device tracks:
 
 Rules:
 - Kids (under 10) earn stickers, NEVER vouchers
-- Adults eligible for vouchers AFTER kid plays on same device
+- Adults eligible for vouchers as soon as they play (no kid-first requirement — removed)
 - Max 1 voucher per device total
-- 3-min cooldown between adult sessions on same device
+- 60s cooldown between adult/teen sessions on same device
 - Resume screen shows all sessions — anyone can pick up where they left off
 
 ---
@@ -250,12 +272,28 @@ URL: `/pages/admin.html`
 
 1. Couple enters PIN at `/pages/couple.html`
 2. They enter all collected letters
-3. Server checks: 7/10 match → puzzle unlocks
-4. Timed letter puzzle — 3 attempts:
-   - Attempt 1: 60s, no hints
-   - Attempt 2: 75s, 2 hints
-   - Attempt 3: ALWAYS triggers video (unlimited time, auto-complete)
-5. Signed R2 URL returned on attempt 3 → video plays
+3. Server checks: 7/10 match against `SECRET_CODE` (the voucher/scratch-card
+   phrase) → Stage 1 unlocks
+4. Three sequential mini-games. Each stage has its OWN secret phrase — a
+   separate env var/secret from `SECRET_CODE` and from each other, lengths
+   can differ — and its own 3-attempt/hint/duration schedule (3rd attempt
+   ALWAYS auto-completes so the party never stalls):
+   - **Stage 1 — Word Scramble** (`COUPLE_STAGE1_WORD`): drag shuffled
+     letter tiles into slots in the correct order. Attempt 1: 60s/0 hints.
+     Attempt 2: 75s/~25% hints. Attempt 3: auto-completes.
+   - **Stage 2 — Memory Match** (`COUPLE_STAGE2_WORD`): flip cards (one set
+     of letters, one set of matching position numbers) to pair each letter
+     with its correct slot. Unlike stages 1/3, this stage's phrase is shown
+     openly in a banner up front — the challenge is finding matching pairs
+     by memory, not guessing an unknown phrase. Attempt 1: 90s/0 pre-matched.
+     Attempt 2: 100s/~30% pre-matched. Attempt 3: auto-completes.
+   - **Stage 3 — Puzzle Assembly** (`COUPLE_STAGE3_WORD`): same order-matching
+     mechanic as Stage 1, jigsaw-piece styled tiles, its own freshly-shuffled
+     tile set. Attempt 1: 60s/0 hints. Attempt 2: 75s/~25% hints. Attempt 3:
+     auto-completes.
+   Winning Stage 1 or 2 just advances to the next stage (attempts reset to 0).
+   Only winning Stage 3 sets `video_unlocked`.
+5. Signed R2 URL returned once Stage 3 is won → video plays
 6. After video: ALL guest screens flood with gender colour
 7. Secret 🎀 sticker unlocks on every kid's sticker book simultaneously
 
@@ -281,11 +319,17 @@ URL: `/pages/admin.html`
 | `POST /api/admin/draw` | admin-controls.js | Trigger winner draw (device dedupe + hard 10 cap) |
 | `POST /api/admin/nudge` / `force-reveal` / `reset-attempts` / `force-video` / `reset-party` | admin-controls.js | Admin overrides — see file header for each. Note: `reset-party` does NOT clear `device_{id}` cooldown/history records |
 | `POST /api/couple/verify-pin` | couple-game.js | Couple PIN check — only succeeds while `party_state === finale` |
-| `POST /api/couple/check-letters` | couple-game.js | Checks collected letters against the real `SECRET_CODE`; ≥ `LETTERS_NEEDED` matches unlocks the puzzle and generates the shuffled tile set |
-| `GET /api/couple/status` | couple-game.js | Resume state: attempt in progress, hints for that attempt, puzzle tiles, video-unlocked flag |
-| `POST /api/couple/attempt` | couple-game.js | Submit a puzzle attempt (3 max — attempt 3 always wins). Wrong attempts 1–2 return hints for the *next* attempt |
+| `POST /api/couple/check-letters` | couple-game.js | Checks collected letters against the real `SECRET_CODE`; ≥ `LETTERS_NEEDED` matches unlocks Stage 1 and generates its shuffled tile set |
+| `GET /api/couple/status` | couple-game.js | Resume state: current `stage` (1–3) + `stageName`, attempt in progress, hints for that attempt, stage-specific puzzle data (`puzzleLetters` / `memoryLayout` / `assemblyLetters`, lazily generated on first read of that stage), video-unlocked flag |
+| `POST /api/couple/attempt` | couple-game.js | Submit an attempt for the *current* stage (3 max per stage — attempt 3 always wins). All 3 stages validate identically: client submits a 10-letter `guess` array in position order, server compares to `SECRET_CODE`. Winning stage 1/2 returns `stageComplete`/`nextStage` and advances without unlocking video; winning stage 3 returns `finalStage` and sets `video_unlocked`. Wrong attempts return hints for the *next* attempt in the same stage |
 | `POST /api/couple/reveal` | couple-game.js | Couple confirms gender (girl/boy) → flips `party_state` to `revealed`, which every guest's own poll picks up independently |
 | `GET /api/couple/video` | couple-game.js | Streams the reveal video from R2, gated on `video_unlocked`. 404s until a video file is actually uploaded |
+| `GET /api/poll/state` | poll-engine.js | Current Opinion Poll status/phase/question/timer/tally — guest phones and the TV host display both poll this. Lazily advances `poll_current_index` off elapsed time; no cron needed |
+| `POST /api/poll/vote` | poll-engine.js | Cast a vote for the active question (1 per device per question, silently deduped) |
+| `GET /api/poll/final` | poll-engine.js | Final per-question tallies once the poll is `complete` |
+| `POST /api/admin/poll/enable` | admin-controls.js | Un-gray the Opinion Poll card on the adult game screen |
+| `POST /api/admin/poll/start` | admin-controls.js | Begin question 1 — timing from here on is fully server-derived |
+| `POST /api/admin/poll/reset` | admin-controls.js | Clear votes/results, back to `disabled` |
 
 ---
 
@@ -316,13 +360,29 @@ URL: `/pages/admin.html`
 "admin_action_log"        → rolling JSON array of last 30 admin/couple actions
 "couple_session_token"    → couple's auth token (6h TTL)
 "couple_letters_confirmed"→ 'true' once ≥ LETTERS_NEEDED letters matched
-"couple_puzzle_letters"   → JSON array — the shuffled tile set (fixed once generated)
-"couple_attempts"         → 0 | 1 | 2 | 3
-"video_unlocked"          → bool
+"couple_stage"            → 1 | 2 | 3 — which finale mini-game is currently active
+                              (1=Word Scramble, 2=Memory Match, 3=Puzzle Assembly)
+"couple_puzzle_letters"   → JSON array — Stage 1 shuffled tile set (fixed once generated)
+"couple_memory_layout"    → JSON array — Stage 2 shuffled 20-card layout
+                              ({type:'letter'|'position', value, pairId, id})
+"couple_assembly_letters" → JSON array — Stage 3 shuffled tile set (fresh shuffle,
+                              independent from Stage 1's)
+"couple_attempts"         → 0 | 1 | 2 | 3 — attempts used in the CURRENT stage only;
+                              resets to 0 each time a stage is won and the next begins
+"video_unlocked"          → bool, set only once Stage 3 is won
 "reset_epoch"             → timestamp string, bumped by admin/reset-party; guests'
                               party-state poll compares it against their locally
                               cached value and auto-clears gr_* localStorage/
                               sessionStorage (except device identity) on mismatch
+"poll_status"              → disabled | ready | active | complete
+"poll_current_index"       → 0-based index of the live/most-recent poll question
+"poll_question_started_at" → timestamp ms; the 30s-vote + 10s-results cycle is
+                              computed lazily from this on every /api/poll/state
+                              read, since Workers have no background timer
+"poll_votes_q{n}"          → JSON array of { deviceId, choiceIndex, at }, one
+                              per question index, deduped by deviceId
+"poll_final_results"       → JSON array of { question, choices, totalVotes },
+                              written once when the poll completes
 ```
 
 ---
@@ -345,17 +405,21 @@ wrangler kv:namespace create "GR_KV" --preview
 wrangler r2 bucket create gender-reveal-video
 
 # Set secrets (never commit these)
-wrangler secret put ADMIN_PIN_HASH    # SHA-256 of your 6-digit admin PIN
-wrangler secret put COUPLE_PIN_HASH   # SHA-256 of your 6-digit couple PIN
-wrangler secret put SECRET_CODE       # The 10 letters e.g. "BABYLOVEIS"
+wrangler secret put ADMIN_PIN_HASH      # SHA-256 of your 6-digit admin PIN
+wrangler secret put COUPLE_PIN_HASH     # SHA-256 of your 6-digit couple PIN
+wrangler secret put SECRET_CODE         # The voucher/scratch-card phrase
+wrangler secret put COUPLE_STAGE1_WORD  # Finale Stage 1 (Word Scramble) phrase
+wrangler secret put COUPLE_STAGE2_WORD  # Finale Stage 2 (Memory Match) phrase
+wrangler secret put COUPLE_STAGE3_WORD  # Finale Stage 3 (Puzzle Assembly) phrase
 
 # Deploy
 wrangler deploy
 
 # Local dev — reads secrets from .dev.vars (git-ignored), no real Cloudflare
 # resources needed. Currently seeded with test values: admin PIN 123456,
-# couple PIN 112233, SECRET_CODE=BABYLOVEIS. Replace with real values in a
-# separate .dev.vars before rehearsing with the real secret code.
+# couple PIN 112233, SECRET_CODE + the three COUPLE_STAGE*_WORD phrases.
+# Replace with real values in a separate .dev.vars before rehearsing with
+# the real party's phrases.
 wrangler dev
 ```
 
@@ -386,10 +450,11 @@ the real party:
    `GET /api/couple/video` 404s and couple-game.html shows a graceful
    "no video uploaded yet" fallback instead of playing anything.
 2. **Set real secrets before the party** — `.dev.vars` only has test values
-   (`ADMIN_PIN_HASH`/`COUPLE_PIN_HASH` for PIN `123456`/`112233`,
-   `SECRET_CODE=BABYLOVEIS`). Run the `wrangler secret put` commands below
-   with real values, and create the real KV namespace (wrangler.toml still
-   has placeholder `YOUR_KV_ID_HERE` / `YOUR_PREVIEW_KV_ID`).
+   for `ADMIN_PIN_HASH`/`COUPLE_PIN_HASH` (PIN `123456`/`112233`), `SECRET_CODE`,
+   and the three `COUPLE_STAGE1_WORD`/`COUPLE_STAGE2_WORD`/`COUPLE_STAGE3_WORD`
+   finale phrases. Run the `wrangler secret put` commands below with real
+   values, and create the real KV namespace (wrangler.toml still has
+   placeholder `YOUR_KV_ID_HERE` / `YOUR_PREVIEW_KV_ID`).
 3. Missing asset polish: lottie animations, sticker webp art, self-hosted
    DM Sans/Fredoka One font files (only Playfair Display is self-hosted
    today — the rest load from Google Fonts CDN, which needs connectivity
@@ -423,12 +488,17 @@ the real party:
 □ Multiple tabs — second tab shows warning
 □ Incognito attempt — fingerprint caught, no voucher
 □ Couple enters PIN — valid only in FINALE state
-□ Couple enters 7+ letters — puzzle unlocks
-□ Couple attempt 3 — video plays
+□ Couple enters 7+ letters — Stage 1 (Word Scramble) unlocks
+□ Stage 1 attempt 3 — auto-completes, advances to Stage 2 (Memory Match)
+□ Stage 2 attempt 3 — auto-completes, advances to Stage 3 (Puzzle Assembly)
+□ Stage 3 attempt 3 — auto-completes, video plays
 □ Video ends — all screens turn gender colour
 □ Kids sticker book — 🎀 appears on all screens
 □ Admin force video — works as override
 □ Full flow on 4G mobile — loads under 2 seconds
+□ Admin enables + starts The Big Guess — 5th tile on play.html un-grays, TV display (poll-host.html) and guest phones show question 1 in sync
+□ The Big Guess — guess submitted, results shown after 30s, auto-advances through all 7 questions, final results shown on completion
+□ Adult plays without a kid playing first on the same phone — still voucher-eligible
 ```
 
 ---

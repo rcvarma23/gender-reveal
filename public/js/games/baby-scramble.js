@@ -79,6 +79,7 @@ export default function createGame(container, config, callbacks) {
     border: 1.5px dashed rgba(255,255,255,.25);
     display:flex; align-items:center; justify-content:center;
     font-size:1.25rem; color:#FFFFFF; font-weight:600;
+    cursor:default;
   `;
 
   const startCardTimer = () => {
@@ -117,6 +118,7 @@ export default function createGame(container, config, callbacks) {
     for (let i = 0; i < word.length; i++) {
       const slot = document.createElement('div');
       slot.style.cssText = slotStyle;
+      slot.addEventListener('click', () => onSlotTap(i));
       slotRow.appendChild(slot);
     }
 
@@ -130,10 +132,24 @@ export default function createGame(container, config, callbacks) {
     });
   };
 
-  const renderSlots = (word) => {
+  const renderSlots = () => {
     Array.from(slotRow.children).forEach((slot, i) => {
+      const isLastPlaced = i === placed.length - 1;
       slot.textContent = placed[i] ? placed[i].letter : '';
+      slot.style.cursor = isLastPlaced ? 'pointer' : 'default';
+      slot.style.borderStyle = isLastPlaced ? 'solid' : 'dashed';
     });
+  };
+
+  // Tap the most-recently-filled slot to undo it — lets a kid fix a
+  // misplaced letter immediately instead of waiting for the full-word
+  // mismatch check to shake-and-reset everything.
+  const onSlotTap = (i) => {
+    if (ended || i !== placed.length - 1) return;
+    const removed = placed.pop();
+    removed.tile.disabled = false;
+    removed.tile.style.opacity = '1';
+    renderSlots();
   };
 
   const onTileTap = (tile, letter, word) => {
@@ -141,7 +157,7 @@ export default function createGame(container, config, callbacks) {
     tile.disabled = true;
     tile.style.opacity = '.3';
     placed.push({ tile, letter });
-    renderSlots(word);
+    renderSlots();
 
     if (placed.length === word.length) {
       const attempt = placed.map(p => p.letter).join('');
@@ -162,7 +178,8 @@ export default function createGame(container, config, callbacks) {
         setTimeout(() => {
           placed.forEach(p => { p.tile.disabled = false; p.tile.style.opacity = '1'; });
           placed = [];
-          Array.from(slotRow.children).forEach(s => { s.textContent = ''; s.style.borderColor = 'rgba(255,255,255,.25)'; });
+          Array.from(slotRow.children).forEach(s => { s.style.borderColor = 'rgba(255,255,255,.25)'; });
+          renderSlots();
         }, 700);
       }
     }

@@ -8,6 +8,9 @@
  *   POST /api/admin/force-reveal    → force-reveal a specific voucher's letter
  *   POST /api/admin/reset-attempts  → reset couple's attempt counter
  *   POST /api/admin/force-video     → override: unlock the reveal video
+ *   POST /api/admin/poll/enable     → un-gray the Opinion Poll card for adults
+ *   POST /api/admin/poll/start      → begin question 1 (server-timed from here)
+ *   POST /api/admin/poll/reset      → clear votes/results, back to disabled
  *   POST /api/admin/reset-party     → wipe state back to WAITING (rehearsal use)
  *
  * KV keys used (in addition to W1/W2 keys):
@@ -17,6 +20,8 @@
  *   winner_device_{id}    → { voucherCode, letter, position }
  *   letters_revealed      → JSON array of { position, letter }
  */
+
+import { POLL_QUESTIONS } from './poll-engine.js';
 
 const ADMIN_TOKEN_TTL_SECONDS = 6 * 60 * 60; // 6 hours
 
@@ -96,7 +101,7 @@ export default {
       const [
         state, partyStartedAt, gamesCompleted, activePlayers,
         eligiblePool, drawStatus, coupleAttempts, videoUnlocked,
-        nudgePending, actionLog, genderRevealed, partyGender,
+        nudgePending, actionLog, genderRevealed, partyGender, pollStatus,
       ] = await Promise.all([
         env.GR_KV.get('party_state'),
         env.GR_KV.get('party_started_at'),
@@ -110,6 +115,7 @@ export default {
         env.GR_KV.get('admin_action_log', { type: 'json' }),
         env.GR_KV.get('gender_revealed'),
         env.GR_KV.get('party_gender'),
+        env.GR_KV.get('poll_status'),
       ]);
 
       // Pull all voucher records (max 10 ever exist)
@@ -148,6 +154,7 @@ export default {
         nudgePending:   nudgePending === 'true',
         genderRevealed: genderRevealed === 'true',
         partyGender:    partyGender || null,
+        pollStatus:     pollStatus || 'disabled',
         actionLog:      (actionLog || []).slice(0, 15),
       });
     }
@@ -263,6 +270,50 @@ export default {
       return json({ success: true });
     }
 
+    // ── POST /api/admin/poll/enable ──────────────────────────
+    // Un-grays the Opinion Poll card on the adult game screen. Guests can
+    // open it and see a "waiting for host to start" screen, but voting
+    // doesn't begin until poll/start.
+    if (method === 'POST' && path === '/api/admin/poll/enable') {
+      const current = await env.GR_KV.get('poll_status');
+      if (current === 'active' || current === 'complete') {
+        return error('Poll already started — reset it first');
+      }
+      await env.GR_KV.put('poll_status', 'ready');
+      await logAction('poll-enable');
+      return json({ success: true });
+    }
+
+    // ── POST /api/admin/poll/start ───────────────────────────
+    // Begins question 1. Timing from here on is fully server-derived —
+    // poll-engine.js lazily advances questions as devices poll.
+    if (method === 'POST' && path === '/api/admin/poll/start') {
+      const voteKeys = await env.GR_KV.list({ prefix: 'poll_votes_q' });
+      await Promise.all([
+        ...voteKeys.keys.map(k => env.GR_KV.delete(k.name)),
+        env.GR_KV.put('poll_status', 'active'),
+        env.GR_KV.put('poll_current_index', '0'),
+        env.GR_KV.put('poll_question_started_at', Date.now().toString()),
+        env.GR_KV.delete('poll_final_results'),
+      ]);
+      await logAction('poll-start', { totalQuestions: POLL_QUESTIONS.length });
+      return json({ success: true, totalQuestions: POLL_QUESTIONS.length });
+    }
+
+    // ── POST /api/admin/poll/reset ───────────────────────────
+    if (method === 'POST' && path === '/api/admin/poll/reset') {
+      const voteKeys = await env.GR_KV.list({ prefix: 'poll_votes_q' });
+      await Promise.all([
+        ...voteKeys.keys.map(k => env.GR_KV.delete(k.name)),
+        env.GR_KV.put('poll_status', 'disabled'),
+        env.GR_KV.delete('poll_current_index'),
+        env.GR_KV.delete('poll_question_started_at'),
+        env.GR_KV.delete('poll_final_results'),
+      ]);
+      await logAction('poll-reset');
+      return json({ success: true });
+    }
+
     // ── POST /api/admin/reset-party ──────────────────────────
     // Rehearsal/testing use — wipes state back to WAITING.
     // Does not touch device_/session_ history.
@@ -272,10 +323,16 @@ export default {
 
       const voucherList = await env.GR_KV.list({ prefix: 'voucher_' });
       const winnerList  = await env.GR_KV.list({ prefix: 'winner_device_' });
+      const pollVoteList = await env.GR_KV.list({ prefix: 'poll_votes_q' });
 
       await Promise.all([
         ...voucherList.keys.map(k => env.GR_KV.delete(k.name)),
         ...winnerList.keys.map(k => env.GR_KV.delete(k.name)),
+        ...pollVoteList.keys.map(k => env.GR_KV.delete(k.name)),
+        env.GR_KV.put('poll_status', 'disabled'),
+        env.GR_KV.delete('poll_current_index'),
+        env.GR_KV.delete('poll_question_started_at'),
+        env.GR_KV.delete('poll_final_results'),
         env.GR_KV.put('party_state', 'waiting'),
         env.GR_KV.delete('party_started_at'),
         env.GR_KV.delete('party_gender'),
@@ -285,6 +342,11 @@ export default {
         env.GR_KV.put('eligible_pool', '[]'),
         env.GR_KV.put('draw_status', 'pending'),
         env.GR_KV.put('couple_attempts', '0'),
+        env.GR_KV.put('couple_stage', '1'),
+        env.GR_KV.delete('couple_letters_confirmed'),
+        env.GR_KV.delete('couple_puzzle_letters'),
+        env.GR_KV.delete('couple_memory_layout'),
+        env.GR_KV.delete('couple_assembly_letters'),
         env.GR_KV.put('video_unlocked', 'false'),
         env.GR_KV.put('nudge_pending', 'false'),
         env.GR_KV.put('letters_revealed', '[]'),

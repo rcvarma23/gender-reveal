@@ -2,30 +2,65 @@
  * CLOUDFLARE WORKER W6 — Couple's Finale Game
  * Routes:
  *   POST /api/couple/verify-pin     → PIN check, returns couple session token
- *   POST /api/couple/check-letters  → 7/10 letter match check, unlocks the puzzle
+ *   POST /api/couple/check-letters  → 7/10 letter match check (against SECRET_CODE,
+ *                                      the same voucher/scratch-card phrase), unlocks stage 1
  *   GET  /api/couple/status         → resume state for the couple's device
- *   POST /api/couple/attempt        → submit a puzzle attempt (3 max — 3rd always wins)
+ *   POST /api/couple/attempt        → submit an attempt for the CURRENT stage
  *   POST /api/couple/reveal         → couple confirms gender, flips party to REVEALED
  *   GET  /api/couple/video          → streams the reveal video from R2 (gated on video_unlocked)
  *
- * The puzzle: the couple already collected (most of) the 10 letters verbally
- * from winning guests. They type in what they've got — check-letters just
- * verifies they actually have >= LETTERS_NEEDED correct before unlocking the
- * puzzle. Once unlocked, the server hands back the real 10 letters shuffled;
- * the game is arranging them into the correct order within the time limit.
+ * The finale is three sequential mini-games, EACH WITH ITS OWN SECRET PHRASE
+ * (independent from SECRET_CODE, the voucher/scratch-card phrase, and from
+ * each other — lengths can differ), each with its own 3-attempt/hint/duration
+ * schedule (3rd attempt always auto-completes so the party never stalls):
+ *   Stage 1 — Word Scramble   (arrange shuffled tiles into the correct order)
+ *             phrase: env.COUPLE_STAGE1_WORD
+ *   Stage 2 — Memory Match    (flip cards — letters + position numbers — to
+ *             pair each letter with its correct slot). Its phrase is shown
+ *             openly in a banner up front — the challenge here is finding
+ *             matching pairs by memory, not guessing an unknown phrase.
+ *             phrase: env.COUPLE_STAGE2_WORD
+ *   Stage 3 — Puzzle Assembly (arrange a fresh shuffle of jigsaw-style
+ *             pieces into the correct order)
+ *             phrase: env.COUPLE_STAGE3_WORD
+ * Winning stage 1 or 2 just advances to the next stage (attempts reset).
+ * Winning stage 3 sets video_unlocked, which is what actually reveals the video.
+ *
+ * All three stages validate identically: the client always submits a full
+ * `guess` array (length = that stage's phrase length) in position order, and
+ * the server checks it against that stage's phrase. For the memory-match
+ * stage, a "correct" guess is naturally guaranteed for any pair the client
+ * can flip and match, so no special-case validation is needed there.
  *
  * KV keys used:
  *   couple_session_token     → current valid couple token (TTL)
  *   couple_letters_confirmed → 'true' once >= LETTERS_NEEDED matched
- *   couple_puzzle_letters    → JSON array — the shuffled tile set (fixed once generated)
- *   couple_attempts          → 0 | 1 | 2 | 3
- *   video_unlocked           → 'true' once a win happens (attempt 3 always wins)
+ *   couple_stage             → 1 | 2 | 3, which mini-game is currently active
+ *   couple_attempts          → 0 | 1 | 2 | 3, attempts used in the CURRENT stage
+ *   couple_puzzle_letters    → JSON array — stage 1 shuffled tile set
+ *   couple_memory_layout     → JSON array — stage 2 shuffled card layout
+ *   couple_assembly_letters  → JSON array — stage 3 shuffled tile set
+ *   video_unlocked           → 'true' once stage 3 is won
  */
 
-const ATTEMPT_CONFIG = {
-  1: { durationSec: 60,  hintsShown: 0 },
-  2: { durationSec: 75,  hintsShown: 2 },
-  3: { durationSec: 999, hintsShown: 10, autoComplete: true },
+const STAGE_WORD_ENV = { 1: 'COUPLE_STAGE1_WORD', 2: 'COUPLE_STAGE2_WORD', 3: 'COUPLE_STAGE3_WORD' };
+
+const STAGE_CONFIG = {
+  1: { name: 'scramble', attempts: {
+    1: { durationSec: 60,  hintsFraction: 0 },
+    2: { durationSec: 75,  hintsFraction: 0.25 },
+    3: { durationSec: 999, hintsFraction: 1, autoComplete: true },
+  } },
+  2: { name: 'memory', attempts: {
+    1: { durationSec: 90,  hintsFraction: 0 },
+    2: { durationSec: 100, hintsFraction: 0.3 },
+    3: { durationSec: 999, hintsFraction: 1, autoComplete: true },
+  } },
+  3: { name: 'assembly', attempts: {
+    1: { durationSec: 60,  hintsFraction: 0 },
+    2: { durationSec: 75,  hintsFraction: 0.25 },
+    3: { durationSec: 999, hintsFraction: 1, autoComplete: true },
+  } },
 };
 
 const shuffle = (arr) => {
@@ -37,12 +72,22 @@ const shuffle = (arr) => {
   return out;
 };
 
-const computeHints = (attemptNumber, secretCode) => {
-  const config = ATTEMPT_CONFIG[attemptNumber];
+const computeHints = (attemptNumber, word, stageAttempts) => {
+  const config = stageAttempts[attemptNumber];
   if (!config) return [];
-  return Array.from({ length: config.hintsShown }, (_, i) => i)
-    .filter(i => i < secretCode.length)
-    .map(i => ({ position: i, letter: secretCode[i] }));
+  const count = Math.ceil(word.length * config.hintsFraction);
+  return Array.from({ length: count }, (_, i) => i)
+    .filter(i => i < word.length)
+    .map(i => ({ position: i, letter: word[i] }));
+};
+
+const generateMemoryLayout = (word) => {
+  const cards = [];
+  word.forEach((letter, i) => {
+    cards.push({ type: 'letter',   value: letter, pairId: i });
+    cards.push({ type: 'position', value: i + 1,  pairId: i });
+  });
+  return shuffle(cards).map((card, id) => ({ ...card, id }));
 };
 
 export default {
@@ -72,7 +117,13 @@ export default {
       await env.GR_KV.put('admin_action_log', JSON.stringify(log.slice(0, 30)));
     };
 
+    // The voucher/scratch-card phrase (10 letters guests collect) — separate
+    // from the three finale mini-game phrases below.
     const secretCode = () => (env.SECRET_CODE || '').toUpperCase().split('');
+
+    // A finale mini-game stage's own phrase.
+    const stageWord = (stage) =>
+      (env[STAGE_WORD_ENV[stage] || STAGE_WORD_ENV[1]] || '').toUpperCase().split('');
 
     // ── POST /api/couple/verify-pin ──────────────────────────
     // No token required — this IS the auth step
@@ -121,9 +172,12 @@ export default {
       const unlocked = matchCount >= lettersNeeded;
 
       if (unlocked) {
-        const existing = await env.GR_KV.get('couple_puzzle_letters', { type: 'json' });
-        if (!existing) {
-          await env.GR_KV.put('couple_puzzle_letters', JSON.stringify(shuffle(code)));
+        const existingStage = await env.GR_KV.get('couple_stage');
+        if (!existingStage) await env.GR_KV.put('couple_stage', '1');
+
+        const existingLetters = await env.GR_KV.get('couple_puzzle_letters', { type: 'json' });
+        if (!existingLetters) {
+          await env.GR_KV.put('couple_puzzle_letters', JSON.stringify(shuffle(stageWord(1))));
         }
         await env.GR_KV.put('couple_letters_confirmed', 'true');
         await logAction('couple-letters-confirmed', { matchCount });
@@ -134,28 +188,63 @@ export default {
 
     // ── GET /api/couple/status ────────────────────────────────
     if (method === 'GET' && path === '/api/couple/status') {
-      const [confirmed, attemptsRaw, videoUnlocked, puzzleLetters] = await Promise.all([
+      const [confirmed, stageRaw, attemptsRaw, videoUnlocked] = await Promise.all([
         env.GR_KV.get('couple_letters_confirmed'),
+        env.GR_KV.get('couple_stage'),
         env.GR_KV.get('couple_attempts'),
         env.GR_KV.get('video_unlocked'),
-        env.GR_KV.get('couple_puzzle_letters', { type: 'json' }),
       ]);
 
+      const stage = parseInt(stageRaw || '1');
+      const stageAttempts = (STAGE_CONFIG[stage] || STAGE_CONFIG[1]).attempts;
       const attempts = parseInt(attemptsRaw || '0');
       const attemptInProgress = Math.min(attempts + 1, 3);
-      const hints = confirmed === 'true' && videoUnlocked !== 'true'
-        ? computeHints(attemptInProgress, secretCode())
-        : [];
+      const active = confirmed === 'true' && videoUnlocked !== 'true';
+      const word = stageWord(stage);
+      const hints = active ? computeHints(attemptInProgress, word, stageAttempts) : [];
+
+      const stageData = {};
+      if (active) {
+        if (stage === 1) {
+          let letters = await env.GR_KV.get('couple_puzzle_letters', { type: 'json' });
+          if (!letters) {
+            letters = shuffle(word);
+            await env.GR_KV.put('couple_puzzle_letters', JSON.stringify(letters));
+          }
+          stageData.puzzleLetters = letters;
+        } else if (stage === 2) {
+          let layout = await env.GR_KV.get('couple_memory_layout', { type: 'json' });
+          if (!layout) {
+            layout = generateMemoryLayout(word);
+            await env.GR_KV.put('couple_memory_layout', JSON.stringify(layout));
+          }
+          stageData.memoryLayout = layout;
+          // Memory Match reveals its target phrase openly in a banner — the
+          // challenge is pairing letters to slots by memory, not guessing
+          // an unknown phrase.
+          stageData.bannerWord = word.join('');
+        } else if (stage === 3) {
+          let letters = await env.GR_KV.get('couple_assembly_letters', { type: 'json' });
+          if (!letters) {
+            letters = shuffle(word);
+            await env.GR_KV.put('couple_assembly_letters', JSON.stringify(letters));
+          }
+          stageData.assemblyLetters = letters;
+        }
+      }
 
       return json({
         success:          true,
         lettersConfirmed: confirmed === 'true',
+        stage,
+        stageName:        (STAGE_CONFIG[stage] || STAGE_CONFIG[1]).name,
+        wordLength:       word.length,
         attempts,
         attemptInProgress,
-        durationSec:      ATTEMPT_CONFIG[attemptInProgress]?.durationSec ?? null,
+        durationSec:      stageAttempts[attemptInProgress]?.durationSec ?? null,
         hints,
         videoUnlocked:    videoUnlocked === 'true',
-        puzzleLetters:    puzzleLetters || null,
+        ...stageData,
       });
     }
 
@@ -166,35 +255,54 @@ export default {
 
       const body  = await request.json().catch(() => ({}));
       const guess = Array.isArray(body.guess) ? body.guess : [];
-      const code  = secretCode();
+
+      const stage = parseInt(await env.GR_KV.get('couple_stage') || '1');
+      const stageAttempts = (STAGE_CONFIG[stage] || STAGE_CONFIG[1]).attempts;
+      const word = stageWord(stage);
 
       const currentAttempts = parseInt(await env.GR_KV.get('couple_attempts') || '0');
       const attemptNumber   = currentAttempts + 1;
       if (attemptNumber > 3) return error('No attempts remaining', 403);
 
-      const config = ATTEMPT_CONFIG[attemptNumber];
-      const guessNormalized = code.map((_, i) => (guess[i] || '').toString().toUpperCase());
-      const correct = code.every((letter, i) => guessNormalized[i] === letter);
+      const config = stageAttempts[attemptNumber];
+      const guessNormalized = word.map((_, i) => (guess[i] || '').toString().toUpperCase());
+      const correct = word.every((letter, i) => guessNormalized[i] === letter);
       const won = correct || config.autoComplete === true;
+
+      if (won && stage < 3) {
+        const nextStage = stage + 1;
+        await Promise.all([
+          env.GR_KV.put('couple_stage', nextStage.toString()),
+          env.GR_KV.put('couple_attempts', '0'),
+        ]);
+        await logAction('couple-stage-complete', { stage, attemptNumber });
+        return json({
+          success: true, won: true, stageComplete: true,
+          completedStage: stage, nextStage,
+          nextStageName: STAGE_CONFIG[nextStage].name,
+          nextStageDurationSec: STAGE_CONFIG[nextStage].attempts[1].durationSec,
+        });
+      }
 
       await env.GR_KV.put('couple_attempts', attemptNumber.toString());
 
       if (won) {
         await env.GR_KV.put('video_unlocked', 'true');
-        await logAction('couple-puzzle-won', { attemptNumber });
-        return json({ success: true, won: true, attemptNumber, solution: code });
+        await logAction('couple-puzzle-won', { stage, attemptNumber });
+        return json({ success: true, won: true, finalStage: true, attemptNumber, solution: word });
       }
 
       const nextAttempt = attemptNumber + 1;
-      const hints = computeHints(nextAttempt, code);
-      await logAction('couple-puzzle-attempt-failed', { attemptNumber });
+      const hints = computeHints(nextAttempt, word, stageAttempts);
+      await logAction('couple-puzzle-attempt-failed', { stage, attemptNumber });
 
       return json({
         success: true,
         won: false,
+        stage,
         attemptNumber,
         attemptsRemaining: Math.max(0, 3 - attemptNumber),
-        nextAttemptDurationSec: ATTEMPT_CONFIG[nextAttempt]?.durationSec ?? null,
+        nextAttemptDurationSec: stageAttempts[nextAttempt]?.durationSec ?? null,
         hints,
       });
     }

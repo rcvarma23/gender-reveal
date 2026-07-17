@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0D0B1E">
+  <meta name="robots" content="noindex, nofollow">
+  <title>The Big Guess — Live 🎯</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/animations.css">
+  <link rel="stylesheet" href="../css/layout.css">
+  <link rel="stylesheet" href="../css/components.css">
+
+  <style>
+    body { background: var(--navy-deepest); overflow-x: hidden; }
+    .host-wrap {
+      min-height: 100dvh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; padding: 3rem 4rem;
+      text-align: center; gap: 2rem; box-sizing: border-box;
+    }
+    .host-eyebrow { font-size: 1.1rem; color: var(--text-muted); letter-spacing: .08em; text-transform: uppercase; }
+    .host-question {
+      font-family: var(--font-display); font-size: clamp(1.8rem, 4vw, 3.2rem);
+      color: var(--gold-soft); max-width: 1100px; line-height: 1.25;
+    }
+    .host-timer {
+      font-size: clamp(2.5rem, 6vw, 4.5rem); font-weight: 800; color: var(--gold-bright);
+      font-family: var(--font-display);
+    }
+    .host-choices {
+      display: flex; flex-direction: column; gap: 1.25rem; width: 100%; max-width: 900px;
+    }
+    .host-choice-row { display: flex; flex-direction: column; gap: .5rem; text-align: left; }
+    .host-choice-label { display: flex; justify-content: space-between; font-size: 1.4rem; color: var(--text-primary); }
+    .host-bar-track { height: 28px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; }
+    .host-bar-fill { height: 100%; background: linear-gradient(90deg, var(--gold-soft), var(--gold-bright)); transition: width .5s ease; }
+    .host-status { font-size: 1.3rem; color: var(--text-muted); }
+    .host-badge {
+      font-size: 1rem; color: var(--gold-soft); border: 1px solid var(--border-gold);
+      border-radius: var(--radius-full); padding: .4rem 1.2rem;
+    }
+  </style>
+</head>
+<body>
+  <main class="host-wrap">
+    <div class="host-badge" id="hostBadge">🎯 The Big Guess</div>
+    <div class="host-eyebrow" id="hostEyebrow">Waiting to start...</div>
+    <div class="host-question" id="hostQuestion">Open the admin panel and press "Start" under The Big Guess to begin.</div>
+    <div class="host-timer" id="hostTimer"></div>
+    <div class="host-choices" id="hostChoices"></div>
+  </main>
+
+  <script type="module">
+    import API from '../js/core/api.js';
+
+    const POLL_MS = 1500;
+
+    const eyebrowEl  = document.getElementById('hostEyebrow');
+    const questionEl = document.getElementById('hostQuestion');
+    const timerEl    = document.getElementById('hostTimer');
+    const choicesEl  = document.getElementById('hostChoices');
+
+    const renderBars = (choices) => {
+      choicesEl.innerHTML = choices.map(c => `
+        <div class="host-choice-row">
+          <div class="host-choice-label"><span>${c.text}</span><span>${c.pct}% (${c.count})</span></div>
+          <div class="host-bar-track"><div class="host-bar-fill" style="width:${c.pct}%"></div></div>
+        </div>
+      `).join('');
+    };
+
+    const renderVotingChoices = (choices) => {
+      choicesEl.innerHTML = choices.map(c => `
+        <div class="host-choice-row">
+          <div class="host-choice-label"><span>${c}</span></div>
+        </div>
+      `).join('');
+    };
+
+    const tick = async () => {
+      const res = await API.poll.state();
+      if (!res.success) return;
+
+      if (res.status === 'disabled' || res.status === 'ready') {
+        eyebrowEl.textContent = res.status === 'ready' ? 'Guests can join now' : 'Waiting to start...';
+        questionEl.textContent = 'Open the admin panel and press "Start" under The Big Guess to begin.';
+        timerEl.textContent = '';
+        choicesEl.innerHTML = '';
+        return;
+      }
+
+      if (res.status === 'complete') {
+        eyebrowEl.textContent = 'The Big Guess — complete';
+        questionEl.textContent = '🎉 Thanks everyone for guessing!';
+        timerEl.textContent = '';
+        choicesEl.innerHTML = (res.finalResults || []).map(r => `
+          <div style="margin-bottom:1.5rem">
+            <div class="host-question" style="font-size:1.4rem;margin-bottom:.75rem">${r.question}</div>
+            ${r.choices.map(c => `
+              <div class="host-choice-row">
+                <div class="host-choice-label"><span>${c.text}</span><span>${c.pct}% (${c.count})</span></div>
+                <div class="host-bar-track"><div class="host-bar-fill" style="width:${c.pct}%"></div></div>
+              </div>
+            `).join('')}
+          </div>
+        `).join('');
+        return;
+      }
+
+      // status === 'active'
+      eyebrowEl.textContent = `Question ${res.currentIndex + 1} of ${res.totalQuestions}`;
+      questionEl.textContent = res.question;
+      timerEl.textContent = `⏱ ${Math.max(0, res.secLeft)}s`;
+
+      if (res.phase === 'voting') {
+        renderVotingChoices(res.choices);
+      } else {
+        renderBars(res.results.choices);
+      }
+    };
+
+    tick();
+    setInterval(tick, POLL_MS);
+  </script>
+</body>
+</html>

@@ -142,7 +142,7 @@
       canvas.style.opacity = '1';
       if (scratchInstance) scratchInstance.destroy();
       scratchInstance = ScratchCard.init(canvas, {
-        thresholdPct: 55,
+        thresholdPct: 30,
         label: 'SCRATCH HERE',
         onThreshold: () => {
           document.getElementById('revealName').textContent = sticker.name;

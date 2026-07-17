@@ -12,6 +12,7 @@ import voucherEngine from './voucher-engine.js';
 import stickerSystem from './sticker-system.js';
 import adminControls from './admin-controls.js';
 import coupleGame from './couple-game.js';
+import pollEngine from './poll-engine.js';
 
 const routes = [
   ['/api/party-state', partyState],
@@ -20,6 +21,7 @@ const routes = [
   ['/api/sticker/', stickerSystem],
   ['/api/admin/', adminControls],
   ['/api/couple/', coupleGame],
+  ['/api/poll/', pollEngine],
 ];
 
 export default {

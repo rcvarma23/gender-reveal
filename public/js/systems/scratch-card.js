@@ -16,7 +16,7 @@ const ScratchCard = (() => {
   const init = (canvasEl, options = {}) => {
     const {
       onThreshold = () => {},
-      thresholdPct = 55,
+      thresholdPct = 30,
       brushRadius  = 22,
       label        = 'SCRATCH HERE',
     } = options;
