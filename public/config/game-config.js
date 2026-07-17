@@ -104,8 +104,8 @@ const GAME_CONFIG = {
       // picks 2 from each bucket so every round mixes difficulty.
       words: [
         'CRIB', 'BURP', 'BABY', 'NAPS',                    // small
-        'DIAPER', 'RATTLE', 'CRADLE', 'BINKY',             // medium
-        'LULLABY', 'NURSERY', 'STROLLER', 'NEWBORN', 'PACIFIER', 'MATERNITY', // large
+        'DIAPER', 'RATTLE', 'CRADLE',              // medium
+         'NURSERY', 'STROLLER', 'NEWBORN', 'PACIFIER', 'MATERNITY', // large
       ],
       sizeBalanced:    true,
       wordCount:       6,
