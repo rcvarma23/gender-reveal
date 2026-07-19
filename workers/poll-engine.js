@@ -9,8 +9,14 @@
  * this was renamed for guests.
  *
  * Routes:
- *   GET  /api/poll/state   → current status/question/phase/tally (guests + host poll this)
- *   POST /api/poll/vote    → cast a vote for the active question (1 per device per question)
+ *   GET  /api/poll/state   → current status/question/phase/tally (guests + host poll this).
+ *                             Always includes `finaleLocked` — true when admin has LOCKed the
+ *                             party (finale) and hasn't individually re-opened 'bigguess' via
+ *                             finale_unlocked_groups (see workers/party-state.js). Guest pages
+ *                             (guess.html, play.html's tile) treat this as "can't play right
+ *                             now"; it does not pause the question cycle's own timer.
+ *   POST /api/poll/vote    → cast a vote for the active question (1 per device per question).
+ *                             Rejected while finale-locked.
  *   GET  /api/poll/final   → final per-question results, once the poll is complete
  *
  * Admin-only controls (enable/start/reset) live in admin-controls.js under
@@ -24,6 +30,13 @@
  *                               Workers have no background timer
  *   poll_votes_q{n}          → JSON array of { deviceId, choiceIndex, at }
  *   poll_final_results       → JSON array of { question, choices, totalVotes }, written once on completion
+ *   poll_results_history      → JSON array of past completed runs, most recent
+ *                               first, capped at 20 entries:
+ *                               { version, runId, completedAt, totalQuestions, results }.
+ *                               Survives poll/start + poll/reset (which only
+ *                               clear poll_final_results/votes/index) so admin
+ *                               can review earlier runs after resetting and
+ *                               replaying the poll — see GET /api/admin/poll/history.
  */
 
 // Question content lives in ONE place — public/config/big-guess-questions.js
@@ -60,6 +73,18 @@ export default {
       });
     const error = (msg, status = 400) => json({ success: false, error: msg }, status);
 
+    // Big Guess is treated like a 5th "group" alongside toddler/kid/teen/adult
+    // (see finale_unlocked_groups in workers/party-state.js) — LOCK closes it
+    // by default same as everyone else, admin can re-open it independently.
+    // This only gates guest access (voting/tile state); it does not pause the
+    // question cycle's own elapsed-time clock.
+    const isFinaleLocked = async () => {
+      const partyState = await env.GR_KV.get('party_state');
+      if (partyState !== 'finale') return false;
+      const unlocked = await env.GR_KV.get('finale_unlocked_groups', { type: 'json' }) || [];
+      return !unlocked.includes('bigguess');
+    };
+
     const tallyFor = async (index) => {
       const votes = await env.GR_KV.get(`poll_votes_q${index}`, { type: 'json' }) || [];
       const question = POLL_QUESTIONS[index];
@@ -74,6 +99,24 @@ export default {
           pct: total ? Math.round((counts[i] / total) * 100) : 0,
         })),
       };
+    };
+
+    // Archives a completed run into poll_results_history so admin can still
+    // see it after a poll/reset (which only wipes poll_final_results/votes).
+    // Guarded by runId (the run's poll_question_started_at) so concurrent
+    // guest polls that all land on the completion branch at once don't each
+    // append their own duplicate entry.
+    const archiveResults = async (runId, finalResults) => {
+      const history = await env.GR_KV.get('poll_results_history', { type: 'json' }) || [];
+      if (history[0]?.runId === runId) return;
+      history.unshift({
+        version: (history[0]?.version || 0) + 1,
+        runId,
+        completedAt: Date.now(),
+        totalQuestions: POLL_QUESTIONS.length,
+        results: finalResults,
+      });
+      await env.GR_KV.put('poll_results_history', JSON.stringify(history.slice(0, 20)));
     };
 
     // Advance poll_current_index/poll_question_started_at as many cycles as
@@ -105,6 +148,7 @@ export default {
           env.GR_KV.put('poll_status', 'complete'),
           env.GR_KV.put('poll_final_results', JSON.stringify(finalResults)),
         ]);
+        await archiveResults(started, finalResults);
         return { status: 'complete', index, started };
       }
 
@@ -121,9 +165,10 @@ export default {
     // ── GET /api/poll/state ──────────────────────────────────
     if (method === 'GET' && path === '/api/poll/state') {
       let status = await env.GR_KV.get('poll_status') || 'disabled';
+      const finaleLocked = await isFinaleLocked();
 
       if (status !== 'active') {
-        return json({ success: true, status, totalQuestions: POLL_QUESTIONS.length });
+        return json({ success: true, status, totalQuestions: POLL_QUESTIONS.length, finaleLocked });
       }
 
       const resolved = await resolveActiveState();
@@ -131,7 +176,7 @@ export default {
 
       if (status === 'complete') {
         const finalResults = await env.GR_KV.get('poll_final_results', { type: 'json' }) || [];
-        return json({ success: true, status, totalQuestions: POLL_QUESTIONS.length, finalResults });
+        return json({ success: true, status, totalQuestions: POLL_QUESTIONS.length, finalResults, finaleLocked });
       }
 
       const elapsedSec = Math.floor((Date.now() - resolved.started) / 1000);
@@ -148,6 +193,7 @@ export default {
         totalQuestions: POLL_QUESTIONS.length,
         question: question.q,
         choices: question.choices,
+        finaleLocked,
       };
 
       if (phase === 'results') {
@@ -161,6 +207,10 @@ export default {
     if (method === 'POST' && path === '/api/poll/vote') {
       const deviceId = request.headers.get('X-Device-Id');
       if (!deviceId) return error('Missing device id');
+
+      if (await isFinaleLocked()) {
+        return error("The Big Guess is paused right now — check back after the couple's finale!");
+      }
 
       const body = await request.json().catch(() => ({}));
       const { questionIndex, choiceIndex } = body;

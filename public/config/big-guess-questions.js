@@ -31,9 +31,9 @@ const BIG_GUESS_QUESTIONS = [
   { q: "Guess the baby's birth weight.", choices: ['Under 6 lbs', '6–7 lbs', '7–8 lbs', 'Over 8 lbs'] },
 
   // ── About Satish & Sanjana ───────────────────────────────────
-  { q: 'Who will be more tense on delivery day?', choices: ['Satish', 'Sanjana', 'Neither — N/A'] },
-  { q: 'How soon will Satish get back to playing pickleball after the baby arrives?', choices: ['Within 15 days', 'After 1 month'] },
-  { q: 'Who will cave first on strict parenting rules?', choices: ['Satish', 'Sanjana', 'None'] },
+  { q: 'Who will be more tense on delivery day?', choices: ['Satish', 'Sanjana', 'Both', 'Neither — N/A'] },
+  { q: 'How soon will Satish get back to playing pickleball after the baby arrives?', choices: ['Within 15 days', 'After 1 month', 'After 3 months'] },
+  { q: 'Who will cave first on strict parenting rules?', choices: ['Satish', 'Sanjana','Both', 'None'] },
   { q: 'Who will lose the most sleep in month one?', choices: ['Sanjana', 'Satish', 'Split evenly', 'Depends on the night'] },
   { q: 'What did Sanjana crave most this pregnancy?', choices: ['Sweet', 'Salty', 'Spicy', 'All of the above'] },
 
@@ -43,6 +43,8 @@ const BIG_GUESS_QUESTIONS = [
   // ── Simple guesses ───────────────────────────────────────────
   { q: "How long will Sanjana be in labor?", choices: ['Under 6 hours', '6–12 hours', '12–24 hours', 'Over 24 hours'] },
   { q: 'Who will the baby look more like at birth?', choices: ['Satish', 'Sanjana', 'Both equally', "Too early to tell"] },
+  { q: 'What day will the baby be born on?', choices: ['A weekday', 'A weekend'] },
+  { q: 'What time of day will the baby be born?', choices: ['Morning', 'Afternoon', 'Evening / Night'] },
 
 ];
 

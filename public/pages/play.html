@@ -328,19 +328,20 @@
 
       // Start polling for state changes. The first poll always fires this
       // handler (see hasPolledServer in state.js) even if the server confirms
-      // the same value already seeded from cache above.
+      // the same value already seeded from cache above. NOTE: state.js only
+      // re-fires this handler when party_state itself changes (or on the
+      // very first poll) — it does NOT re-fire just because
+      // finaleUnlockedGroups changed while state stays 'finale' the whole
+      // time. So this handler only covers the state transition itself;
+      // refreshFinaleLocks() below (its own unconditional interval) is what
+      // actually keeps individual tile locks live-updated while admin
+      // toggles groups mid-finale.
       PartyState.startPolling((state) => {
         log.debug('Poll state', state);
         if (state === 'waiting')  { window.location.href = 'index.html'; return; }
         if (state === 'revealed') { window.location.href = 'reveal.html'; return; }
-        if (state === 'finale')   {
-          // Only couple game visible — hide age selector
-          document.getElementById('ageGrid').style.display = 'none';
-          document.getElementById('checkingState').style.display = 'none';
-          showToast('Games are now closed! Watch the couple reveal! 🎀');
-          return;
-        }
-        if (state === 'active') revealPicker();
+        if (state === 'finale')   { revealPicker(); return; }
+        if (state === 'active')   { revealPicker(); clearFinaleLocks(); }
       });
 
       // Check for existing sessions on this device
@@ -349,6 +350,56 @@
       // Poll whether the host has enabled/started The Big Guess
       refreshGuessCard();
       setInterval(refreshGuessCard, 5000);
+
+      // Independently re-check finale group locks every few seconds — not
+      // gated on party_state changing, so admin toggling a group (e.g. the
+      // one-click "Unlock Kids") reflects on this screen automatically
+      // within a few seconds, no manual refresh needed.
+      refreshFinaleLocks();
+      setInterval(refreshFinaleLocks, 5000);
+    };
+
+    // ─── FINALE PER-GROUP LOCKS ───────────────────────────────
+    // During 'finale' the couple's game is the main event, but admin can
+    // re-open individual age groups (see finale_unlocked_groups) so kids
+    // aren't stuck waiting around.
+
+    const AGE_GROUPS = ['toddler', 'kid', 'teen', 'adult'];
+
+    const applyFinaleLocks = (unlockedGroups) => {
+      AGE_GROUPS.forEach((ageGroup) => {
+        const card = document.querySelector(`[data-age="${ageGroup}"]`);
+        if (!card) return;
+        const note = card.querySelector('.card-perks');
+        if (!note.dataset.originalHtml) note.dataset.originalHtml = note.innerHTML;
+
+        const locked = !unlockedGroups.includes(ageGroup);
+        card.classList.toggle('age-card-item--disabled', locked);
+        card.tabIndex = locked ? -1 : 0;
+        card.setAttribute('aria-disabled', locked ? 'true' : 'false');
+        note.innerHTML = locked
+          ? '🔒 Locked — couple\'s finale in progress'
+          : note.dataset.originalHtml;
+      });
+    };
+
+    const clearFinaleLocks = () => {
+      AGE_GROUPS.forEach((ageGroup) => {
+        const card = document.querySelector(`[data-age="${ageGroup}"]`);
+        if (!card) return;
+        const note = card.querySelector('.card-perks');
+        card.classList.remove('age-card-item--disabled');
+        card.tabIndex = 0;
+        card.setAttribute('aria-disabled', 'false');
+        if (note.dataset.originalHtml) note.innerHTML = note.dataset.originalHtml;
+      });
+    };
+
+    const refreshFinaleLocks = async () => {
+      const res = await API.partyState.get();
+      if (!res.success) return;
+      if (res.state === 'finale') applyFinaleLocks(res.finaleUnlockedGroups || []);
+      else if (res.state === 'active') clearFinaleLocks();
     };
 
     // ─── THE BIG GUESS ────────────────────────────────────────
@@ -359,9 +410,20 @@
       const res = await API.poll.state();
       if (!res.success) return;
 
-      const enabled = res.status !== 'disabled';
       const card = document.getElementById('guessCard');
       const note = document.getElementById('guessCardNote');
+
+      // Admin LOCKed the party and hasn't individually re-opened Big Guess —
+      // same "closed during finale" treatment as the age-group tiles above.
+      if (res.finaleLocked) {
+        card.classList.add('age-card-item--disabled');
+        card.tabIndex = -1;
+        card.setAttribute('aria-disabled', 'true');
+        note.textContent = '🔒 Locked — couple\'s finale in progress';
+        return;
+      }
+
+      const enabled = res.status !== 'disabled';
       card.classList.toggle('age-card-item--disabled', !enabled);
       card.tabIndex = enabled ? 0 : -1;
       card.setAttribute('aria-disabled', enabled ? 'false' : 'true');
@@ -417,6 +479,12 @@
     // ─── AGE SELECTION ────────────────────────────────────────
 
     window.selectAge = async (ageGroup) => {
+      const cardEl = document.querySelector(`[data-age="${ageGroup}"]`);
+      if (cardEl?.classList.contains('age-card-item--disabled')) {
+        log.info('Blocked — age group locked during finale', ageGroup);
+        return;
+      }
+
       log.info('Age selected', ageGroup);
 
       // Check cooldown for adults/teens

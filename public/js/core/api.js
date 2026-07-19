@@ -181,6 +181,18 @@ const API = (() => {
       post('/admin/reset-party', { confirm: true }, { 'X-Admin-Token': token }),
 
     /**
+     * Finale — unlock/lock one age group's games while state is 'finale'
+     */
+    finaleGroupToggle: (group, unlocked, token) =>
+      post('/admin/finale-group-toggle', { group, unlocked }, { 'X-Admin-Token': token }),
+
+    /**
+     * Finale — one click: unlock exactly toddler+kid+teen, leave adult+bigguess locked
+     */
+    finaleUnlockKids: (token) =>
+      post('/admin/finale-unlock-kids', {}, { 'X-Admin-Token': token }),
+
+    /**
      * Opinion Poll — un-gray the adult game card
      */
     pollEnable: (token) =>
@@ -197,6 +209,12 @@ const API = (() => {
      */
     pollReset: (token) =>
       post('/admin/poll/reset', {}, { 'X-Admin-Token': token }),
+
+    /**
+     * Opinion Poll — past completed runs (survives resets)
+     */
+    pollHistory: (token) =>
+      get('/admin/poll/history', { 'X-Admin-Token': token }),
   };
 
   // ─── COUPLE GAME ───────────────────────────────────────────
@@ -226,6 +244,13 @@ const API = (() => {
      */
     status: (token) =>
       get('/couple/status', { 'X-Couple-Token': token }),
+
+    /**
+     * Flip party to REVEALED. Called automatically by tv-mode.html — gender
+     * comes from the PARTY_GENDER secret server-side unless explicitly passed.
+     */
+    reveal: (token, gender) =>
+      post('/couple/reveal', gender ? { gender } : {}, { 'X-Couple-Token': token }),
   };
 
   // ─── OPINION POLL ──────────────────────────────────────────

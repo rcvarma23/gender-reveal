@@ -163,6 +163,36 @@
       </div>
     </div>
 
+    <!-- Finale group access -->
+    <div class="section">
+      <div class="section-title">Finale Group Access</div>
+      <p style="color:var(--text-muted);font-size:.8rem;margin-bottom:.6rem">
+        Once LOCKED, every age group is closed by default. Toggle any group
+        back open so those guests can keep playing while the couple does
+        their finale.
+      </p>
+      <div class="ctrl-grid" id="finaleGroupGrid">
+        <button class="ctrl-btn" data-group="toddler" onclick="toggleFinaleGroup('toddler')">
+          <span><span class="ctrl-btn__label">🍼 Little One</span><br><span class="ctrl-btn__sub" data-sub>Locked</span></span>
+        </button>
+        <button class="ctrl-btn" data-group="kid" onclick="toggleFinaleGroup('kid')">
+          <span><span class="ctrl-btn__label">🎈 Kid</span><br><span class="ctrl-btn__sub" data-sub>Locked</span></span>
+        </button>
+        <button class="ctrl-btn" data-group="teen" onclick="toggleFinaleGroup('teen')">
+          <span><span class="ctrl-btn__label">🎮 Teen</span><br><span class="ctrl-btn__sub" data-sub>Locked</span></span>
+        </button>
+        <button class="ctrl-btn" data-group="adult" onclick="toggleFinaleGroup('adult')">
+          <span><span class="ctrl-btn__label">🎉 Adult</span><br><span class="ctrl-btn__sub" data-sub>Locked</span></span>
+        </button>
+        <button class="ctrl-btn" data-group="bigguess" onclick="toggleFinaleGroup('bigguess')">
+          <span><span class="ctrl-btn__label">🎯 Big Guess</span><br><span class="ctrl-btn__sub" data-sub>Locked</span></span>
+        </button>
+      </div>
+      <button class="ctrl-btn ctrl-btn--success" style="margin-top:.75rem" onclick="unlockKidsAtOnce()">
+        <span><span class="ctrl-btn__label">👶 Unlock Kids (Little One + Kid + Teen)</span><br><span class="ctrl-btn__sub">One click — Adult &amp; Big Guess stay locked</span></span>
+      </button>
+    </div>
+
     <!-- Actions -->
     <div class="section">
       <div class="section-title">Actions</div>
@@ -203,6 +233,10 @@
         Open <a href="poll-host.html" target="_blank" style="color:var(--gold-soft)">poll-host.html</a>
         on the TV/laptop display before pressing Start.
       </p>
+      <button class="ctrl-btn" style="margin-top:.75rem" onclick="togglePollHistory()">
+        <span><span class="ctrl-btn__label">📜 Past Results</span><br><span class="ctrl-btn__sub">Every completed run, even after a reset</span></span>
+      </button>
+      <div id="pollHistoryPanel" style="display:none;margin-top:.75rem;flex-direction:column;gap:.75rem;"></div>
     </div>
 
     <!-- Letter board -->
@@ -338,6 +372,15 @@
       document.getElementById('statAttempts').textContent = `${d.coupleAttempts}/3`;
       document.getElementById('statPoll').textContent = d.pollStatus.charAt(0).toUpperCase() + d.pollStatus.slice(1);
 
+      // Finale group access toggles
+      const unlockedGroups = d.finaleUnlockedGroups || [];
+      document.querySelectorAll('#finaleGroupGrid [data-group]').forEach((btn) => {
+        const group = btn.dataset.group;
+        const unlocked = unlockedGroups.includes(group);
+        btn.classList.toggle('ctrl-btn--success', unlocked);
+        btn.querySelector('[data-sub]').textContent = unlocked ? 'Unlocked — can play' : 'Locked';
+      });
+
       // Letter board
       const board = document.getElementById('letterBoard');
       const byPosition = {};
@@ -447,6 +490,56 @@
     window.forceRevealVoucher = async (voucherCode) => {
       const res = await API.admin.forceReveal(voucherCode, getToken());
       showToast(res.success ? `✅ Revealed letter "${res.letter}"` : (res.error || 'Failed'), res.success ? 'success' : 'error');
+      refreshStats();
+    };
+
+    window.toggleFinaleGroup = async (group) => {
+      const btn = document.querySelector(`#finaleGroupGrid [data-group="${group}"]`);
+      const currentlyUnlocked = btn.classList.contains('ctrl-btn--success');
+      const res = await API.admin.finaleGroupToggle(group, !currentlyUnlocked, getToken());
+      showToast(res.success
+        ? (currentlyUnlocked ? `🔒 ${group} locked` : `🔓 ${group} unlocked`)
+        : (res.error || 'Failed'), res.success ? 'success' : 'error');
+      refreshStats();
+    };
+
+    window.togglePollHistory = async () => {
+      const panel = document.getElementById('pollHistoryPanel');
+      const opening = panel.style.display === 'none';
+      if (!opening) { panel.style.display = 'none'; return; }
+
+      const res = await API.admin.pollHistory(getToken());
+      if (!res.success) {
+        showToast(res.error || 'Failed to load history', 'error');
+        return;
+      }
+      if (!res.history.length) {
+        panel.innerHTML = '<p style="color:var(--text-muted);font-size:.85rem">No completed runs yet.</p>';
+      } else {
+        panel.innerHTML = res.history.map(run => `
+          <div style="border:1px solid var(--border-subtle);border-radius:var(--radius-md,12px);padding:.75rem;">
+            <div style="font-weight:600;color:var(--gold-soft);margin-bottom:.5rem">
+              Run #${run.version} — ${new Date(run.completedAt).toLocaleString()}
+            </div>
+            ${run.results.map(r => `
+              <div style="margin-bottom:.5rem">
+                <div style="font-size:.85rem;color:var(--text-primary);margin-bottom:.25rem">${r.question}</div>
+                ${r.choices.map(c => `
+                  <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text-muted)">
+                    <span>${c.text}</span><span>${c.pct}% (${c.count})</span>
+                  </div>
+                `).join('')}
+              </div>
+            `).join('')}
+          </div>
+        `).join('');
+      }
+      panel.style.display = 'flex';
+    };
+
+    window.unlockKidsAtOnce = async () => {
+      const res = await API.admin.finaleUnlockKids(getToken());
+      showToast(res.success ? '👶 Little One, Kid & Teen unlocked' : (res.error || 'Failed'), res.success ? 'success' : 'error');
       refreshStats();
     };
 

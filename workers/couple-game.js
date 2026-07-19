@@ -6,7 +6,11 @@
  *                                      the same voucher/scratch-card phrase), unlocks stage 1
  *   GET  /api/couple/status         → resume state for the couple's device
  *   POST /api/couple/attempt        → submit an attempt for the CURRENT stage
- *   POST /api/couple/reveal         → couple confirms gender, flips party to REVEALED
+ *   POST /api/couple/reveal         → flips party to REVEALED. Called automatically by
+ *                                      tv-mode.html's fixed timer after the reveal video
+ *                                      starts — gender comes from env.PARTY_GENDER (set
+ *                                      once ahead of the party) unless body.gender is
+ *                                      explicitly passed, so nothing is chosen live
  *   GET  /api/couple/video          → streams the reveal video from R2 (gated on video_unlocked)
  *
  * The finale is three sequential mini-games, EACH WITH ITS OWN SECRET PHRASE
@@ -312,9 +316,14 @@ export default {
       const videoUnlocked = await env.GR_KV.get('video_unlocked');
       if (videoUnlocked !== 'true') return error('Video has not unlocked yet', 403);
 
-      const body   = await request.json().catch(() => ({}));
-      const gender = body.gender === 'boy' ? 'boy' : body.gender === 'girl' ? 'girl' : null;
-      if (!gender) return error('gender must be "girl" or "boy"');
+      const body = await request.json().catch(() => ({}));
+      // tv-mode.html calls this with no body — the gender is pre-set by the
+      // admin ahead of the party as a secret, never chosen live, so the
+      // auto-reveal timer doesn't need to know it client-side.
+      const requested = body.gender === 'boy' ? 'boy' : body.gender === 'girl' ? 'girl' : null;
+      const fallback   = env.PARTY_GENDER === 'boy' ? 'boy' : env.PARTY_GENDER === 'girl' ? 'girl' : null;
+      const gender = requested || fallback;
+      if (!gender) return error('gender must be "girl" or "boy" (and PARTY_GENDER secret is not set as a fallback)');
 
       const currentState = await env.GR_KV.get('party_state') || 'waiting';
       if (currentState !== 'finale') return error(`Cannot reveal from state ${currentState}`);

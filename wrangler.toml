@@ -45,6 +45,9 @@ LETTERS_NEEDED   = "7"
 # npx wrangler secret put COUPLE_STAGE1_WORD   ← Stage 1 (Word Scramble) phrase
 # npx wrangler secret put COUPLE_STAGE2_WORD   ← Stage 2 (Memory Match) phrase
 # npx wrangler secret put COUPLE_STAGE3_WORD   ← Stage 3 (Puzzle Assembly) phrase
+# npx wrangler secret put PARTY_GENDER          ← "girl" or "boy" — the actual result,
+#                                                  pre-set so tv-mode.html's auto-reveal
+#                                                  timer needs no live confirmation
 
 # ── DEV ENVIRONMENT ──────────────────────────────────────────────
 # Separate Worker name, KV namespace, R2 bucket, and secrets from prod.
@@ -58,6 +61,7 @@ LETTERS_NEEDED   = "7"
 #   wrangler secret put COUPLE_STAGE1_WORD --env dev
 #   wrangler secret put COUPLE_STAGE2_WORD --env dev
 #   wrangler secret put COUPLE_STAGE3_WORD --env dev
+#   wrangler secret put PARTY_GENDER --env dev
 [env.dev]
 name = "gender-reveal-dev-byrc"
 

@@ -11,6 +11,16 @@
  *   gender_revealed      → bool
  *   nudge_pending        → bool (set by admin to alert winners)
  *   winner_{sessionId}   → { voucherCode, letter } (set after draw)
+ *   finale_unlocked_groups → JSON array of strings still allowed during
+ *                            'finale': toddler/kid/teen/adult (gates new
+ *                            sessions, see session-manager.js) plus
+ *                            'bigguess' (gates poll voting, see
+ *                            poll-engine.js). Reset to [] on every
+ *                            transition into finale; admin then re-opens
+ *                            specific entries via
+ *                            POST /api/admin/finale-group-toggle, or
+ *                            unlocks toddler+kid+teen in one write via
+ *                            POST /api/admin/finale-unlock-kids
  */
 
 export default {
@@ -49,6 +59,7 @@ export default {
       const gender      = await env.GR_KV.get('party_gender') || null;
       const nudgePending = await env.GR_KV.get('nudge_pending') === 'true';
       const resetEpoch  = await env.GR_KV.get('reset_epoch') || '0';
+      const finaleUnlockedGroups = await env.GR_KV.get('finale_unlocked_groups', { type: 'json' }) || [];
 
       // Check if this device is a winner (post-draw)
       let isWinner    = false;
@@ -81,6 +92,7 @@ export default {
         letter,
         nudge:        nudgePending,
         resetEpoch,
+        finaleUnlockedGroups,
         timestamp:    Date.now(),
       });
     }
@@ -133,6 +145,12 @@ export default {
       // Special handling per state
       if (newState === 'active') {
         await env.GR_KV.put('party_started_at', Date.now().toString());
+      }
+
+      // Every LOCK starts fully closed — admin re-opens specific age
+      // groups afterward via /api/admin/finale-group-toggle.
+      if (newState === 'finale') {
+        await env.GR_KV.put('finale_unlocked_groups', '[]');
       }
 
       if (newState === 'revealed' && body.gender) {

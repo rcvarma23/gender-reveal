@@ -8,9 +8,12 @@
  *   POST /api/admin/force-reveal    → force-reveal a specific voucher's letter
  *   POST /api/admin/reset-attempts  → reset couple's attempt counter
  *   POST /api/admin/force-video     → override: unlock the reveal video
+ *   POST /api/admin/finale-group-toggle → unlock/lock one age group's games (or 'bigguess') during finale
+ *   POST /api/admin/finale-unlock-kids  → one-click: unlock exactly toddler+kid+teen, lock adult+bigguess
  *   POST /api/admin/poll/enable     → un-gray the Opinion Poll card for adults
  *   POST /api/admin/poll/start      → begin question 1 (server-timed from here)
  *   POST /api/admin/poll/reset      → clear votes/results, back to disabled
+ *   GET  /api/admin/poll/history    → past completed Big Guess runs (versioned, survives resets)
  *   POST /api/admin/reset-party     → wipe state back to WAITING (rehearsal use)
  *
  * KV keys used (in addition to W1/W2 keys):
@@ -102,6 +105,7 @@ export default {
         state, partyStartedAt, gamesCompleted, activePlayers,
         eligiblePool, drawStatus, coupleAttempts, videoUnlocked,
         nudgePending, actionLog, genderRevealed, partyGender, pollStatus,
+        finaleUnlockedGroups,
       ] = await Promise.all([
         env.GR_KV.get('party_state'),
         env.GR_KV.get('party_started_at'),
@@ -116,6 +120,7 @@ export default {
         env.GR_KV.get('gender_revealed'),
         env.GR_KV.get('party_gender'),
         env.GR_KV.get('poll_status'),
+        env.GR_KV.get('finale_unlocked_groups', { type: 'json' }),
       ]);
 
       // Pull all voucher records (max 10 ever exist)
@@ -155,6 +160,7 @@ export default {
         genderRevealed: genderRevealed === 'true',
         partyGender:    partyGender || null,
         pollStatus:     pollStatus || 'disabled',
+        finaleUnlockedGroups: finaleUnlockedGroups || [],
         actionLog:      (actionLog || []).slice(0, 15),
       });
     }
@@ -270,6 +276,38 @@ export default {
       return json({ success: true });
     }
 
+    // ── POST /api/admin/finale-group-toggle ──────────────────
+    // Lets a kid/teen keep playing during finale even though the party is
+    // otherwise closed for the couple's game. Adult stays lockable too, for
+    // symmetry, but the intended use is toddler/kid/teen.
+    if (method === 'POST' && path === '/api/admin/finale-group-toggle') {
+      const body = await request.json();
+      const { group, unlocked } = body;
+      const validGroups = ['toddler', 'kid', 'teen', 'adult', 'bigguess'];
+      if (!validGroups.includes(group)) return error('Invalid group');
+
+      const current = await env.GR_KV.get('finale_unlocked_groups', { type: 'json' }) || [];
+      const next = unlocked
+        ? Array.from(new Set([...current, group]))
+        : current.filter(g => g !== group);
+
+      await env.GR_KV.put('finale_unlocked_groups', JSON.stringify(next));
+      await logAction('finale-group-toggle', { group, unlocked: !!unlocked });
+      return json({ success: true, finaleUnlockedGroups: next });
+    }
+
+    // ── POST /api/admin/finale-unlock-kids ───────────────────
+    // One-click version of the toggle above: re-opens exactly Little
+    // One/Kid/Teen in a single atomic write (overwrites, doesn't merge),
+    // so Adult and Big Guess are guaranteed locked afterward even if either
+    // had been individually unlocked before.
+    if (method === 'POST' && path === '/api/admin/finale-unlock-kids') {
+      const next = ['toddler', 'kid', 'teen'];
+      await env.GR_KV.put('finale_unlocked_groups', JSON.stringify(next));
+      await logAction('finale-unlock-kids');
+      return json({ success: true, finaleUnlockedGroups: next });
+    }
+
     // ── POST /api/admin/poll/enable ──────────────────────────
     // Un-grays the Opinion Poll card on the adult game screen. Guests can
     // open it and see a "waiting for host to start" screen, but voting
@@ -314,6 +352,16 @@ export default {
       return json({ success: true });
     }
 
+    // ── GET /api/admin/poll/history ──────────────────────────
+    // Past completed Big Guess runs, most recent first. Written by
+    // poll-engine.js on natural completion; never cleared by poll/start,
+    // poll/reset, or reset-party — this is the "one place" to review
+    // results from before a reset/replay.
+    if (method === 'GET' && path === '/api/admin/poll/history') {
+      const history = await env.GR_KV.get('poll_results_history', { type: 'json' }) || [];
+      return json({ success: true, history });
+    }
+
     // ── POST /api/admin/reset-party ──────────────────────────
     // Rehearsal/testing use — wipes state back to WAITING.
     // Does not touch device_/session_ history.
@@ -350,6 +398,7 @@ export default {
         env.GR_KV.put('video_unlocked', 'false'),
         env.GR_KV.put('nudge_pending', 'false'),
         env.GR_KV.put('letters_revealed', '[]'),
+        env.GR_KV.delete('finale_unlocked_groups'),
         // Bump the reset epoch so every guest device's next poll detects
         // the reset and clears its own localStorage/sessionStorage —
         // otherwise stale session/cooldown/device data survives until

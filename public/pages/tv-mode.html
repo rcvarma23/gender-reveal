@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0D0B1E">
+  <title>Gender Reveal 🎬</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/theme.css">
+  <link rel="stylesheet" href="../css/animations.css">
+  <link rel="stylesheet" href="../css/layout.css">
+  <link rel="stylesheet" href="../css/components.css">
+
+  <style>
+    body { background: var(--navy-deepest); overflow-x: hidden; }
+    .page-inner {
+      position: relative; z-index: 2; min-height: 100dvh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 1.5rem 1.25rem 3rem; gap: 1.5rem; text-align: center;
+    }
+    #introSection, #countdownSection, #videoSection { display: none; }
+    .headline { font-family: var(--font-display); font-size: 1.5rem; color: var(--gold-soft); }
+    .subline { font-size: .9rem; color: var(--text-muted); max-width: 320px; }
+    .countdown-number {
+      font-family: var(--font-display); font-size: 6rem; font-weight: 900;
+      color: var(--gold-bright); animation: pulse-gold .9s ease-in-out infinite;
+    }
+    #videoWrap {
+      position: relative; width: 100%; max-width: 480px; aspect-ratio: 16 / 9;
+      border-radius: var(--radius-lg); overflow: hidden; background: #000;
+    }
+    #videoWrap iframe { width: 100%; height: 100%; border: 0; }
+    #unmuteBtn {
+      position: absolute; bottom: 1rem; left: 50%; transform: translateX(-50%);
+      z-index: 3;
+    }
+    #announcedBanner {
+      display: none; font-size: .85rem; color: var(--gold-soft);
+      border: 1px solid var(--border-gold); border-radius: var(--radius-full);
+      padding: .5rem 1.1rem;
+    }
+  </style>
+</head>
+<body>
+  <main class="page-inner">
+
+    <div id="introSection">
+      <div class="headline">🎉 Gender Reveal Starting Soon! 🎉</div>
+      <div class="subline">Get everyone gathered around — here we go!</div>
+    </div>
+
+    <div id="countdownSection">
+      <div class="countdown-number" id="countdownNumber">5</div>
+    </div>
+
+    <div id="videoSection">
+      <div id="videoWrap">
+        <iframe id="revealFrame" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+        <button class="btn btn-primary" id="unmuteBtn">🔊 Unmute &amp; Play</button>
+      </div>
+      <div id="announcedBanner">✅ Announced to all guests!</div>
+    </div>
+
+  </main>
+
+  <script type="module">
+    import API from '../js/core/api.js';
+
+    // ── Config — update these once you have the real video ──────────────
+    // Extract the ID from your YouTube URL (the part after "v=").
+    const YOUTUBE_VIDEO_ID   = 'FtyF5ZNy_7E';
+    // How many seconds after the video actually starts playing before the
+    // gender is auto-revealed to every guest. Set this to match your real
+    // video's length (or the moment in it you want the reveal to fire).
+    const VIDEO_DURATION_SEC = 30;
+    // ──────────────────────────────────────────────────────────────────
+
+    const params = new URLSearchParams(window.location.search);
+    const TOKEN_KEY = 'gr_couple_token';
+    const token = params.get('token') || localStorage.getItem(TOKEN_KEY);
+    if (!token) { window.location.href = 'couple.html'; }
+    if (params.get('token')) localStorage.setItem(TOKEN_KEY, params.get('token'));
+
+    const introSection    = document.getElementById('introSection');
+    const countdownSection = document.getElementById('countdownSection');
+    const videoSection    = document.getElementById('videoSection');
+    const countdownNumber = document.getElementById('countdownNumber');
+    const unmuteBtn       = document.getElementById('unmuteBtn');
+    const announcedBanner = document.getElementById('announcedBanner');
+
+    const showSection = (name) => {
+      introSection.style.display    = name === 'intro'     ? 'flex' : 'none';
+      countdownSection.style.display = name === 'countdown' ? 'flex' : 'none';
+      videoSection.style.display    = name === 'video'      ? 'flex' : 'none';
+    };
+
+    const startCountdown = () => {
+      showSection('countdown');
+      let n = 5;
+      countdownNumber.textContent = n;
+      const timer = setInterval(() => {
+        n--;
+        if (n <= 0) {
+          clearInterval(timer);
+          startVideo();
+          return;
+        }
+        countdownNumber.textContent = n;
+      }, 1000);
+    };
+
+    const armAutoReveal = () => {
+      setTimeout(async () => {
+        const res = await API.couple.reveal(token);
+        if (res.success) announcedBanner.style.display = 'inline-block';
+      }, VIDEO_DURATION_SEC * 1000);
+    };
+
+    const startVideo = () => {
+      showSection('video');
+      const frame = document.getElementById('revealFrame');
+      // Autoplay-with-sound is unreliable on mobile browsers even after a
+      // same-page interaction, so start muted and require one tap to unmute
+      // — the only autoplay pattern that's reliably unblocked cross-browser.
+      frame.src = `https://www.youtube.com/embed/${YOUTUBE_VIDEO_ID}?autoplay=1&mute=1&rel=0&playsinline=1`;
+      armAutoReveal();
+
+      unmuteBtn.addEventListener('click', () => {
+        frame.src = `https://www.youtube.com/embed/${YOUTUBE_VIDEO_ID}?autoplay=1&mute=0&rel=0&playsinline=1`;
+        unmuteBtn.style.display = 'none';
+      });
+    };
+
+    const init = async () => {
+      const status = await API.couple.status(token);
+      if (!status.success || !status.videoUnlocked) {
+        window.location.href = 'couple-game.html';
+        return;
+      }
+      showSection('intro');
+      setTimeout(startCountdown, 2500);
+    };
+
+    init();
+  </script>
+</body>
+</html>

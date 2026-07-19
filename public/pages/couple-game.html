@@ -91,13 +91,7 @@
     }
 
     #stage1Section, #stage2Section, #stage3Section,
-    #autoCompleteSection, #transitionSection,
-    #videoSection, #genderSection { display: none; }
-    #revealVideo { width: 100%; max-width: 360px; border-radius: var(--radius-lg); }
-    .gender-buttons { display: flex; gap: 1rem; }
-    .gender-btn { font-size: 1.1rem; padding: 1rem 1.5rem; border-radius: var(--radius-full); border: 1.5px solid var(--border-subtle); cursor: pointer; font-family: var(--font-body); font-weight: 600; }
-    .gender-btn.girl { background: rgba(255,128,171,0.15); color: var(--pink); border-color: var(--pink); }
-    .gender-btn.boy  { background: rgba(64,196,255,0.15); color: var(--blue-reveal); border-color: var(--blue-reveal); }
+    #autoCompleteSection, #transitionSection { display: none; }
   </style>
 </head>
 <body>
@@ -147,22 +141,6 @@
       <div class="slots-row" id="autoSlotsRow" style="margin-top:1rem"></div>
     </div>
 
-    <div id="videoSection">
-      <div class="headline">🎬 The Big Moment</div>
-      <video id="revealVideo" controls playsinline></video>
-      <div class="feedback" id="videoFallback"></div>
-      <button class="btn btn-primary" id="continueToGenderBtn" style="margin-top:1rem">We watched it — reveal the color! 🎉</button>
-    </div>
-
-    <div id="genderSection">
-      <div class="headline">What is it?! 💗💙</div>
-      <div class="subline" style="color:var(--text-muted);font-size:.85rem;max-width:280px">Pick the actual result — this is what floods every guest's screen next.</div>
-      <div class="gender-buttons" style="margin-top:1rem">
-        <button class="gender-btn girl" id="girlBtn">💗 Girl</button>
-        <button class="gender-btn boy"  id="boyBtn">💙 Boy</button>
-      </div>
-    </div>
-
   </main>
 
   <script type="module">
@@ -179,8 +157,6 @@
     const stage3Section       = document.getElementById('stage3Section');
     const transitionSection   = document.getElementById('transitionSection');
     const autoCompleteSection = document.getElementById('autoCompleteSection');
-    const videoSection        = document.getElementById('videoSection');
-    const genderSection       = document.getElementById('genderSection');
 
     const STAGE_NAMES = { 1: 'Word Scramble', 2: 'Memory Match', 3: 'Puzzle Assembly' };
 
@@ -193,9 +169,7 @@
       stage3Section.style.display       = name === 'stage3'     ? 'block' : 'none';
       transitionSection.style.display   = name === 'transition' ? 'block' : 'none';
       autoCompleteSection.style.display = name === 'auto'       ? 'block' : 'none';
-      videoSection.style.display        = name === 'video'      ? 'block' : 'none';
-      genderSection.style.display       = name === 'gender'     ? 'block' : 'none';
-      stageDots.style.display           = (name === 'video' || name === 'gender') ? 'none' : 'flex';
+      stageDots.style.display           = 'flex';
     };
 
     const renderStageDots = (stage) => {
@@ -405,41 +379,13 @@
       setTimeout(() => loadStatus(), 2000);
     };
 
+    // Stage 3 won — hand off to tv-mode.html, which runs the countdown,
+    // plays the reveal video, and auto-triggers the gender reveal on a
+    // timer (no more manual "watched it" / Girl-Boy buttons here).
     const goToVideo = () => {
       Confetti.burst({ palette: 'gold', count: 70 });
-      showSection('video');
-
-      const video = document.getElementById('revealVideo');
-      const src = `/api/couple/video?token=${encodeURIComponent(token)}`;
-      video.src = src;
-
-      fetch(src, { method: 'GET' }).then((res) => {
-        if (!res.ok) {
-          document.getElementById('videoFallback').textContent =
-            "No video uploaded yet — that's expected before the real party. Continue below when ready.";
-          video.style.display = 'none';
-        }
-      }).catch(() => {});
+      window.location.href = `tv-mode.html?token=${encodeURIComponent(token)}`;
     };
-
-    document.getElementById('continueToGenderBtn').addEventListener('click', () => {
-      showSection('gender');
-    });
-
-    const submitGender = async (gender) => {
-      const res = await fetch('/api/couple/reveal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Couple-Token': token },
-        body: JSON.stringify({ gender }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        window.location.href = 'reveal.html';
-      }
-    };
-
-    document.getElementById('girlBtn').addEventListener('click', () => submitGender('girl'));
-    document.getElementById('boyBtn').addEventListener('click', () => submitGender('boy'));
 
     const loadStatus = async () => {
       const status = await API.couple.status(token);

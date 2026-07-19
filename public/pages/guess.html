@@ -47,6 +47,7 @@
       <div id="guessQuestion" style="font-size:1.1rem;font-weight:600;color:var(--text-primary);min-height:3.5rem;"></div>
       <div id="guessChoices" style="display:flex;flex-direction:column;gap:.65rem;overflow-y:auto;"></div>
       <div id="guessFooter" style="text-align:center;color:var(--text-muted);font-size:.8rem;"></div>
+      <button class="btn btn-secondary" id="guessHomeBtn" style="display:none">🏠 Home</button>
     </div>
   </main>
 
@@ -55,26 +56,17 @@
     import PartyState  from '../js/core/state.js';
 
     const TICK_MS = 2000;
+    const HOME_REDIRECT_DELAY_MS = 8000;
     let lastVotedIndex = -1;
+    let homeRedirectScheduled = false;
+
+    const homeBtn = document.getElementById('guessHomeBtn');
+    homeBtn.addEventListener('click', () => { window.location.href = 'play.html'; });
 
     PartyState.startPolling((state) => {
       if (state === 'waiting')  window.location.href = 'index.html';
       if (state === 'revealed') window.location.href = 'reveal.html';
     });
-
-    const renderResultsBlock = (label, r) => {
-      const rows = r.choices.map(c => `
-        <div style="display:flex;flex-direction:column;gap:.25rem;">
-          <div style="display:flex;justify-content:space-between;font-size:.85rem;color:var(--text-primary);">
-            <span>${c.text}</span><span>${c.pct}% (${c.count})</span>
-          </div>
-          <div style="height:8px;border-radius:999px;background:rgba(255,255,255,.1);overflow:hidden;">
-            <div style="height:100%;width:${c.pct}%;background:var(--gold-bright,#FFD700);"></div>
-          </div>
-        </div>
-      `).join('');
-      return `${label ? `<div style="font-weight:600;color:var(--gold-soft);">${label}</div>` : ''}<div style="display:flex;flex-direction:column;gap:.6rem;">${rows}</div>`;
-    };
 
     const guessTick = async () => {
       const res = await API.poll.state();
@@ -86,12 +78,26 @@
       const choicesEl = document.getElementById('guessChoices');
       const footerEl  = document.getElementById('guessFooter');
 
+      // Admin LOCKed the party for the couple's finale and hasn't
+      // individually re-opened Big Guess — block regardless of the
+      // underlying poll status.
+      if (res.finaleLocked) {
+        progEl.textContent = 'The Big Guess';
+        timerEl.textContent = '';
+        qEl.textContent = '🔒 Paused — check back after the couple\'s finale!';
+        choicesEl.innerHTML = '';
+        footerEl.textContent = '';
+        homeBtn.style.display = 'none';
+        return;
+      }
+
       if (res.status === 'disabled') {
         progEl.textContent = 'The Big Guess';
         timerEl.textContent = '';
         qEl.textContent = '🎯 The host hasn\'t opened this yet — check back soon!';
         choicesEl.innerHTML = '';
         footerEl.textContent = '';
+        homeBtn.style.display = 'none';
         return;
       }
 
@@ -101,21 +107,27 @@
         qEl.textContent = '🎯 Waiting for the host to start...';
         choicesEl.innerHTML = '';
         footerEl.textContent = '';
+        homeBtn.style.display = 'none';
         lastVotedIndex = -1;
         return;
       }
 
       if (res.status === 'complete') {
-        progEl.textContent = 'The Big Guess — Final Results';
+        progEl.textContent = 'The Big Guess — Finished';
         timerEl.textContent = '';
         qEl.textContent = '🎉 Thanks for guessing!';
-        choicesEl.innerHTML = (res.finalResults || [])
-          .map(r => renderResultsBlock(r.question, r)).join('<div style="height:.5rem"></div>');
-        footerEl.textContent = '';
+        choicesEl.innerHTML = '';
+        footerEl.textContent = '📺 Check the TV for the full results! Heading home shortly...';
+        homeBtn.style.display = 'inline-flex';
+        if (!homeRedirectScheduled) {
+          homeRedirectScheduled = true;
+          setTimeout(() => { window.location.href = 'play.html'; }, HOME_REDIRECT_DELAY_MS);
+        }
         return;
       }
 
       // status === 'active'
+      homeBtn.style.display = 'none';
       progEl.textContent = `Question ${res.currentIndex + 1} / ${res.totalQuestions}`;
       timerEl.textContent = `⏱ ${Math.max(0, res.secLeft)}s`;
       qEl.textContent = res.question;
@@ -140,8 +152,10 @@
           footerEl.textContent = '';
         }
       } else {
-        choicesEl.innerHTML = renderResultsBlock(null, res.results);
-        footerEl.textContent = 'Next question coming up...';
+        // Results phase — tallies are shown on the TV only (poll-host.html),
+        // not to guest phones.
+        choicesEl.innerHTML = '';
+        footerEl.textContent = '📺 Results are on the TV — next question coming up...';
       }
     };
 

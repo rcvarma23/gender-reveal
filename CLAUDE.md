@@ -72,15 +72,27 @@ gender-reveal/
 │   │   ├── scratch.html             ✅ DONE — Scratch card canvas
 │   │   ├── letter.html              ✅ DONE — Letter reveal screen (resumable)
 │   │   ├── couple.html              ✅ DONE — PIN entry + collected-letters check
-│   │   ├── couple-game.html         ✅ DONE — Timed letter puzzle + video + gender confirm
+│   │   ├── couple-game.html         ✅ DONE — Timed letter puzzle for all 3 stages; on
+│   │   │                               winning stage 3 it hands off to tv-mode.html
+│   │   │                               (no more inline video / manual gender buttons here)
+│   │   ├── tv-mode.html             ✅ DONE — Couple's own device, post-stage-3: intro
+│   │   │                               banner → 5s countdown → autoplay YouTube embed →
+│   │   │                               fixed-timer auto-reveal (POST /api/couple/reveal
+│   │   │                               with no body, gender comes from PARTY_GENDER secret,
+│   │   │                               nothing chosen live). Not admin-controlled.
 │   │   ├── reveal.html              ✅ DONE — Gender flood screen + secret sticker unlock
-│   │   ├── admin.html               ✅ DONE — Admin control panel (incl. The Big Guess controls)
+│   │   ├── admin.html               ✅ DONE — Admin control panel (incl. The Big Guess
+│   │   │                               controls + past-results history, and per-age-group
+│   │   │                               finale unlock toggles)
 │   │   ├── guess.html               ✅ DONE — Guest-facing "The Big Guess" live guessing
 │   │   │                               game; standalone, no age group/session dependency,
-│   │   │                               reachable via play.html's 5th tile
+│   │   │                               reachable via play.html's 5th tile. Shows only the
+│   │   │                               voting UI — never renders vote tallies (TV-only, see
+│   │   │                               poll-host.html)
 │   │   └── poll-host.html           ✅ DONE — TV/laptop display for the live "Big Guess";
 │   │                                   admin opens this manually, no PIN gate (read-only,
-│   │                                   just renders GET /api/poll/state)
+│   │                                   just renders GET /api/poll/state). The ONLY screen
+│   │                                   that shows vote tallies to anyone
 │   │
 │   ├── css/
 │   │   ├── theme.css                ✅ DONE — Design tokens, typography
@@ -213,7 +225,11 @@ however many are in `public/config/big-guess-questions.js` (15 as of this merge 
 game was retired as an adult voucher option). Each question runs 30s to guess + 10s to see
 results, auto-advancing off a server timestamp (`workers/poll-engine.js`, internal key/route
 names still say "poll") so every phone and the TV host display (`pages/poll-host.html`) stay in
-sync without a manual "next" click. Lives at `pages/guess.html`.
+sync without a manual "next" click. Lives at `pages/guess.html`. **Guests never see vote
+tallies** — `guess.html` only shows the voting UI and a "check the TV" message during the
+results/complete phases; `poll-host.html` is the only screen that renders bars/percentages.
+Every completed run is archived (never overwritten by `poll/start`/`poll/reset`) into
+`poll_results_history` — reviewable from admin.html's "Past Results" panel even after resets.
 
 ---
 
@@ -250,8 +266,21 @@ WAITING → ACTIVE → FINALE → REVEALED
 
 - `WAITING` — default when site goes live. All guests see welcome screen.
 - `ACTIVE` — admin presses START. Games open for everyone.
-- `FINALE` — admin presses LOCK. Games closed. Couple's game only.
-- `REVEALED` — video played. All screens show gender colour.
+- `FINALE` — admin presses LOCK. Every age group AND The Big Guess close by default — but
+  admin can individually re-open Little One/Kid/Teen/Adult/Big Guess from admin.html's
+  "Finale Group Access" panel (`finale_unlocked_groups` KV key — Big Guess is just a 5th
+  entry, `'bigguess'`, in the same array) so bored kids keep playing while the couple does
+  their finale. New sessions for a non-unlocked age group are silently rejected server-side
+  (`workers/session-manager.js`, same `party_not_active` response guests already handle);
+  Big Guess votes are rejected server-side too (`workers/poll-engine.js`, `finaleLocked` on
+  every `/api/poll/state` response). A one-click "👶 Unlock Kids" admin button
+  (`POST /api/admin/finale-unlock-kids`) atomically sets the array to exactly
+  `['toddler','kid','teen']`, guaranteeing Adult + Big Guess stay locked even if either had
+  been individually unlocked before. Guest screens (`play.html`'s tiles, the Big Guess tile,
+  `guess.html`) each run their own independent ~5s poll to reflect lock changes live — they
+  do NOT wait for a `party_state` transition to refresh, since toggling a group doesn't
+  change `party_state` itself.
+- `REVEALED` — video played, gender auto-announced. All screens show gender colour.
 
 **State stored in Cloudflare KV. Guests poll `/api/party-state` every 10 seconds.**
 
@@ -277,6 +306,11 @@ Rules:
 URL: `/pages/admin.html`
 - Protected by 6-digit PIN (set as Cloudflare Worker secret)
 - Controls: START / LOCK / TRIGGER DRAW / NUDGE / FORCE REVEAL / RESET
+- Finale Group Access: 5 toggles (Little One/Kid/Teen/Adult/Big Guess) to individually
+  re-open something while LOCKED, plus a one-click "Unlock Kids" button — see Party State
+  Machine above
+- The Big Guess: Enable/Start/Reset, plus a "Past Results" panel listing every completed run
+  (survives resets)
 - Shows live stats: guests online, games done, letters revealed (X/10)
 - Letter board shows which letters scratched vs pending
 - All actions logged to KV with timestamp
@@ -308,9 +342,21 @@ URL: `/pages/admin.html`
      auto-completes.
    Winning Stage 1 or 2 just advances to the next stage (attempts reset to 0).
    Only winning Stage 3 sets `video_unlocked`.
-5. Signed R2 URL returned once Stage 3 is won → video plays
-6. After video: ALL guest screens flood with gender colour
-7. Secret 🎀 sticker unlocks on every kid's sticker book simultaneously
+5. Winning Stage 3 hands the couple's own device off to `/pages/tv-mode.html`
+   (not admin-controlled, not a separate TV browser — the couple's phone
+   itself transitions): a short "Gender Reveal Starting Soon!" banner, a 5→1
+   countdown, then an autoplaying embedded YouTube video (`YOUTUBE_VIDEO_ID`
+   constant at the top of `tv-mode.html` — swap in the real link once known).
+6. A fixed timer (`VIDEO_DURATION_SEC` constant, also in `tv-mode.html` —
+   update to match the real video's length) fires after the video starts
+   playing and calls `POST /api/couple/reveal` with **no body** — gender
+   comes from the `PARTY_GENDER` secret (set once ahead of the party via
+   `wrangler secret put PARTY_GENDER`), never chosen live. This flips
+   `party_state` → `revealed`.
+7. Every guest-facing page already redirects to `reveal.html` on its next
+   10s poll once it sees `state === 'revealed'` (`index.html`, `play.html`,
+   every `game-*.html`) — no new guest-side code needed for this.
+8. Secret 🎀 sticker unlocks on every kid's sticker book simultaneously
 
 ---
 
@@ -337,14 +383,17 @@ URL: `/pages/admin.html`
 | `POST /api/couple/check-letters` | couple-game.js | Checks collected letters against the real `SECRET_CODE`; ≥ `LETTERS_NEEDED` matches unlocks Stage 1 and generates its shuffled tile set |
 | `GET /api/couple/status` | couple-game.js | Resume state: current `stage` (1–3) + `stageName`, attempt in progress, hints for that attempt, stage-specific puzzle data (`puzzleLetters` / `memoryLayout` / `assemblyLetters`, lazily generated on first read of that stage), video-unlocked flag |
 | `POST /api/couple/attempt` | couple-game.js | Submit an attempt for the *current* stage (3 max per stage — attempt 3 always wins). All 3 stages validate identically: client submits a 10-letter `guess` array in position order, server compares to `SECRET_CODE`. Winning stage 1/2 returns `stageComplete`/`nextStage` and advances without unlocking video; winning stage 3 returns `finalStage` and sets `video_unlocked`. Wrong attempts return hints for the *next* attempt in the same stage |
-| `POST /api/couple/reveal` | couple-game.js | Couple confirms gender (girl/boy) → flips `party_state` to `revealed`, which every guest's own poll picks up independently |
+| `POST /api/couple/reveal` | couple-game.js | Flips `party_state` to `revealed`, which every guest's own poll picks up independently. Called automatically by `tv-mode.html`'s fixed timer with no body — gender defaults to the `PARTY_GENDER` secret unless `body.gender` is explicitly passed |
 | `GET /api/couple/video` | couple-game.js | Streams the reveal video from R2, gated on `video_unlocked`. 404s until a video file is actually uploaded |
-| `GET /api/poll/state` | poll-engine.js | Current Opinion Poll status/phase/question/timer/tally — guest phones and the TV host display both poll this. Lazily advances `poll_current_index` off elapsed time; no cron needed |
-| `POST /api/poll/vote` | poll-engine.js | Cast a vote for the active question (1 per device per question, silently deduped) |
+| `GET /api/poll/state` | poll-engine.js | Current Opinion Poll status/phase/question/timer/tally — guest phones and the TV host display both poll this. Lazily advances `poll_current_index` off elapsed time; no cron needed. Always includes `finaleLocked` (true when LOCKed and `'bigguess'` isn't in `finale_unlocked_groups`) |
+| `POST /api/poll/vote` | poll-engine.js | Cast a vote for the active question (1 per device per question, silently deduped). Rejected while `finaleLocked` |
 | `GET /api/poll/final` | poll-engine.js | Final per-question tallies once the poll is `complete` |
 | `POST /api/admin/poll/enable` | admin-controls.js | Un-gray the Opinion Poll card on the adult game screen |
 | `POST /api/admin/poll/start` | admin-controls.js | Begin question 1 — timing from here on is fully server-derived |
-| `POST /api/admin/poll/reset` | admin-controls.js | Clear votes/results, back to `disabled` |
+| `POST /api/admin/poll/reset` | admin-controls.js | Clear votes/results, back to `disabled` (leaves `poll_results_history` untouched) |
+| `GET /api/admin/poll/history` | admin-controls.js | Every completed Big Guess run, versioned, most recent first — survives `poll/start`/`poll/reset`/`reset-party` |
+| `POST /api/admin/finale-group-toggle` | admin-controls.js | Unlock/lock one age group (or `'bigguess'`) while `party_state === 'finale'` |
+| `POST /api/admin/finale-unlock-kids` | admin-controls.js | One click: atomically sets `finale_unlocked_groups` to exactly `['toddler','kid','teen']` — Adult and Big Guess guaranteed locked afterward |
 
 ---
 
@@ -353,7 +402,17 @@ URL: `/pages/admin.html`
 ```
 "party_state"             → waiting | active | finale | revealed
 "party_started_at"        → timestamp
-"party_gender"            → girl | boy (set by couple/reveal)
+"party_gender"            → girl | boy (set by couple/reveal — normally from
+                              the PARTY_GENDER secret, never chosen live)
+"finale_unlocked_groups"  → JSON array of strings still allowed to run during
+                              finale: any of toddler/kid/teen/adult (gates
+                              new sessions, workers/session-manager.js) plus
+                              'bigguess' (gates poll/vote + finaleLocked,
+                              workers/poll-engine.js). Reset to [] on every
+                              transition into finale; admin re-opens specific
+                              entries from admin.html, or unlocks exactly
+                              toddler+kid+teen in one write via
+                              POST /api/admin/finale-unlock-kids
 "gender_revealed"         → bool
 "active_players"          → count
 "games_completed"         → count
@@ -397,7 +456,15 @@ URL: `/pages/admin.html`
 "poll_votes_q{n}"          → JSON array of { deviceId, choiceIndex, at }, one
                               per question index, deduped by deviceId
 "poll_final_results"       → JSON array of { question, choices, totalVotes },
-                              written once when the poll completes
+                              written once when the poll completes. Only ever
+                              shown on poll-host.html (the TV) — guest.html
+                              never renders tallies
+"poll_results_history"     → JSON array of past completed runs, most recent
+                              first, capped at 20: { version, runId,
+                              completedAt, totalQuestions, results }. Never
+                              cleared by poll/start, poll/reset, or
+                              reset-party — the durable archive admin.html's
+                              "Past Results" panel reads from
 ```
 
 ---
@@ -426,15 +493,16 @@ wrangler secret put SECRET_CODE         # The voucher/scratch-card phrase
 wrangler secret put COUPLE_STAGE1_WORD  # Finale Stage 1 (Word Scramble) phrase
 wrangler secret put COUPLE_STAGE2_WORD  # Finale Stage 2 (Memory Match) phrase
 wrangler secret put COUPLE_STAGE3_WORD  # Finale Stage 3 (Puzzle Assembly) phrase
+wrangler secret put PARTY_GENDER        # "girl" or "boy" — the actual result, pre-set
 
 # Deploy
 wrangler deploy
 
 # Local dev — reads secrets from .dev.vars (git-ignored), no real Cloudflare
 # resources needed. Currently seeded with test values: admin PIN 123456,
-# couple PIN 112233, SECRET_CODE + the three COUPLE_STAGE*_WORD phrases.
-# Replace with real values in a separate .dev.vars before rehearsing with
-# the real party's phrases.
+# couple PIN 112233, SECRET_CODE + the three COUPLE_STAGE*_WORD phrases,
+# PARTY_GENDER=girl. Replace with real values in a separate .dev.vars before
+# rehearsing with the real party's phrases/result.
 wrangler dev
 ```
 
@@ -460,16 +528,19 @@ wrangler dev
 All 6 build phases of game/voucher/couple logic are done. What's left before
 the real party:
 
-1. **Upload the actual reveal video** to R2: `wrangler r2 object put
-   gender-reveal-video/reveal-video.mp4 --file=<your-video>`. Without it,
-   `GET /api/couple/video` 404s and couple-game.html shows a graceful
-   "no video uploaded yet" fallback instead of playing anything.
+1. **Set the real reveal video** in `public/pages/tv-mode.html` — update the
+   `YOUTUBE_VIDEO_ID` and `VIDEO_DURATION_SEC` constants near the top of the
+   `<script>` block to the real YouTube link/length. (The finale now plays
+   an embedded YouTube video, not the R2-uploaded MP4 — `GET
+   /api/couple/video`/`GR_R2` still exist and work if ever needed, but
+   `tv-mode.html` doesn't call them.)
 2. **Set real secrets before the party** — `.dev.vars` only has test values
    for `ADMIN_PIN_HASH`/`COUPLE_PIN_HASH` (PIN `123456`/`112233`), `SECRET_CODE`,
-   and the three `COUPLE_STAGE1_WORD`/`COUPLE_STAGE2_WORD`/`COUPLE_STAGE3_WORD`
-   finale phrases. Run the `wrangler secret put` commands below with real
-   values, and create the real KV namespace (wrangler.toml still has
-   placeholder `YOUR_KV_ID_HERE` / `YOUR_PREVIEW_KV_ID`).
+   the three `COUPLE_STAGE1_WORD`/`COUPLE_STAGE2_WORD`/`COUPLE_STAGE3_WORD`
+   finale phrases, and `PARTY_GENDER` (test value `girl`). Run the `wrangler
+   secret put` commands below with real values, and create the real KV
+   namespace (wrangler.toml still has placeholder `YOUR_KV_ID_HERE` /
+   `YOUR_PREVIEW_KV_ID`).
 3. Missing asset polish: lottie animations, sticker webp art, self-hosted
    DM Sans/Fredoka One font files (only Playfair Display is self-hosted
    today — the rest load from Google Fonts CDN, which needs connectivity
@@ -506,17 +577,29 @@ the real party:
 □ Couple enters 7+ letters — Stage 1 (Word Scramble) unlocks
 □ Stage 1 attempt 3 — auto-completes, advances to Stage 2 (Memory Match)
 □ Stage 2 attempt 3 — auto-completes, advances to Stage 3 (Puzzle Assembly)
-□ Stage 3 attempt 3 — auto-completes, video plays
-□ Video ends — all screens turn gender colour
+□ Stage 3 attempt 3 — auto-completes, couple's device redirects to tv-mode.html
+□ tv-mode.html — intro banner, 5→1 countdown, YouTube video autoplays (muted, unmute tap works)
+□ VIDEO_DURATION_SEC after video starts — gender auto-reveals with no manual tap, "Announced to all guests!" banner shows
+□ A second browser sitting on play.html/index.html auto-redirects to reveal.html within 10s, no manual action
+□ party_gender in KV matches the PARTY_GENDER secret
 □ Kids sticker book — 🎀 appears on all screens
 □ Admin force video — works as override
 □ Full flow on 4G mobile — loads under 2 seconds
+□ Admin LOCKs the party — all 4 age tiles show locked on play.html; admin unlocks "Kid" — kid can start a new session, toddler/teen/adult still blocked
 □ Admin enables + starts The Big Guess — 5th tile on play.html un-grays, TV display (poll-host.html) and guest phones show question 1 in sync
-□ The Big Guess — guess submitted, results shown after 30s, auto-advances through every question in big-guess-questions.js, final results shown on completion
+□ The Big Guess — guess submitted; guest phone never shows tallies (just "check the TV"); poll-host.html shows full bars/percentages; auto-advances through every question in big-guess-questions.js, including the 2 birth-day/birth-time questions
+□ Admin resets the poll after completion — GET /api/admin/poll/history (admin.html "Past Results") still shows the completed run
+□ Big Guess finishes (poll status complete) — guess.html shows a Home button immediately and auto-redirects to play.html after ~8s with no manual action
+□ Admin LOCKs the party while Big Guess is enabled/active — guessCard tile on play.html shows "Locked", guess.html shows the paused message, POST /api/poll/vote is rejected
+□ Admin presses "👶 Unlock Kids" — Little One/Kid/Teen tiles unlock together, Adult + Big Guess stay locked, WITHOUT the admin touching the 3 individual toggles; a guest already sitting on play.html sees its tiles unlock within ~5s with no manual refresh
 □ Adult plays without a kid playing first on the same phone — still voucher-eligible
 ```
 
 ---
 
-*Last updated: Phases 0–6 complete — all game/voucher/couple-finale logic built and tested*
-*Next session: Phase 7 — real video upload, real secrets, result.html, asset polish, device testing*
+*Last updated: "New Changes Needed 7" — Big Guess auto-redirects home + Home button on
+completion, LOCK now also locks Big Guess (treated as a 5th finale group, 'bigguess'), and a
+one-click "Unlock Kids" admin action that atomically re-opens toddler+kid+teen while guest
+screens live-refresh their lock state every ~5s instead of waiting on a party_state change*
+*Next session: Phase 7 — real YouTube link + duration in tv-mode.html, real secrets (incl.
+PARTY_GENDER), asset polish, device testing*

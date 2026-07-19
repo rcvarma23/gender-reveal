@@ -167,7 +167,7 @@ const GAME_CONFIG = {
       },
       attempt2: {
         durationSec:  75,
-        hintsShown:   2,          // show 2 letters in correct position
+        hintsShown:   3,          // show 3 letters in correct position
       },
       attempt3: {
         durationSec:  999,        // unlimited — always completes

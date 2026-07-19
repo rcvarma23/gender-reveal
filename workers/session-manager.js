@@ -69,10 +69,18 @@ export default {
 
       if (!sessionId || !ageGroup) return error('Missing sessionId or ageGroup');
 
-      // Check party is active
+      // Check party is active — or, during finale, that this age group has
+      // been individually re-opened by the admin (see finale_unlocked_groups
+      // in workers/party-state.js).
       const partyState = await env.GR_KV.get('party_state');
-      if (partyState !== 'active') {
+      if (partyState === 'waiting' || partyState === 'revealed' || !partyState) {
         return json({ success: true, status: 'party_not_active', partyState });
+      }
+      if (partyState === 'finale') {
+        const unlocked = await env.GR_KV.get('finale_unlocked_groups', { type: 'json' }) || [];
+        if (!unlocked.includes(ageGroup)) {
+          return json({ success: true, status: 'party_not_active', partyState });
+        }
       }
 
       // Get device record
