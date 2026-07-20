@@ -325,21 +325,34 @@ URL: `/pages/admin.html`
    phrase) → Stage 1 unlocks
 4. Three sequential mini-games. Each stage has its OWN secret phrase — a
    separate env var/secret from `SECRET_CODE` and from each other, lengths
-   can differ — and its own 3-attempt/hint/duration schedule (3rd attempt
-   ALWAYS auto-completes so the party never stalls):
+   can differ — and its own 3-attempt/hint/duration schedule. Attempt 3 is
+   ALWAYS a winning attempt server-side (`autoComplete: true` in
+   `STAGE_CONFIG`, `workers/couple-game.js` — whatever's submitted, correct
+   or not, including a timeout submission, wins) so the party never stalls,
+   but it is still a genuinely *played* round, not a scripted skip: no
+   tiles/cards are pre-locked, the couple places/flips everything
+   themselves, with the full answer shown openly as a safety net (banner)
+   for stages 1/3 (stage 2's banner is already always shown). This replaced
+   an earlier version where attempt 3 was a non-interactive ~1.8s
+   "solving it for you" animation — see "New Changes Needed 8" in
+   `Manual_Testing_observations.md`, reported as a bug (felt like the game
+   skipped straight to the next stage after only 2 real tries).
    - **Stage 1 — Word Scramble** (`COUPLE_STAGE1_WORD`): drag shuffled
      letter tiles into slots in the correct order. Attempt 1: 60s/0 hints.
-     Attempt 2: 75s/~25% hints. Attempt 3: auto-completes.
+     Attempt 2: 75s/~25% hints. Attempt 3: 45s, answer shown in a banner,
+     tiles unlocked (must still be placed), any submission wins.
    - **Stage 2 — Memory Match** (`COUPLE_STAGE2_WORD`): flip cards (one set
      of letters, one set of matching position numbers) to pair each letter
      with its correct slot. Unlike stages 1/3, this stage's phrase is shown
-     openly in a banner up front — the challenge is finding matching pairs
-     by memory, not guessing an unknown phrase. Attempt 1: 90s/0 pre-matched.
-     Attempt 2: 100s/~30% pre-matched. Attempt 3: auto-completes.
+     openly in a banner up front on every attempt — the challenge is finding
+     matching pairs by memory, not guessing an unknown phrase. Attempt 1:
+     90s/0 pre-matched. Attempt 2: 100s/~30% pre-matched. Attempt 3: 75s/0
+     pre-matched, any submission (including an incomplete one at timeout)
+     wins.
    - **Stage 3 — Puzzle Assembly** (`COUPLE_STAGE3_WORD`): same order-matching
      mechanic as Stage 1, jigsaw-piece styled tiles, its own freshly-shuffled
      tile set. Attempt 1: 60s/0 hints. Attempt 2: 75s/~25% hints. Attempt 3:
-     auto-completes.
+     45s, answer shown in a banner, tiles unlocked, any submission wins.
    Winning Stage 1 or 2 just advances to the next stage (attempts reset to 0).
    Only winning Stage 3 sets `video_unlocked`.
 5. Winning Stage 3 hands the couple's own device off to `/pages/tv-mode.html`
@@ -382,7 +395,7 @@ URL: `/pages/admin.html`
 | `POST /api/couple/verify-pin` | couple-game.js | Couple PIN check — only succeeds while `party_state === finale` |
 | `POST /api/couple/check-letters` | couple-game.js | Checks collected letters against the real `SECRET_CODE`; ≥ `LETTERS_NEEDED` matches unlocks Stage 1 and generates its shuffled tile set |
 | `GET /api/couple/status` | couple-game.js | Resume state: current `stage` (1–3) + `stageName`, attempt in progress, hints for that attempt, stage-specific puzzle data (`puzzleLetters` / `memoryLayout` / `assemblyLetters`, lazily generated on first read of that stage), video-unlocked flag |
-| `POST /api/couple/attempt` | couple-game.js | Submit an attempt for the *current* stage (3 max per stage — attempt 3 always wins). All 3 stages validate identically: client submits a 10-letter `guess` array in position order, server compares to `SECRET_CODE`. Winning stage 1/2 returns `stageComplete`/`nextStage` and advances without unlocking video; winning stage 3 returns `finalStage` and sets `video_unlocked`. Wrong attempts return hints for the *next* attempt in the same stage |
+| `POST /api/couple/attempt` | couple-game.js | Submit an attempt for the *current* stage (3 max per stage — attempt 3 always wins, but is still played manually, not auto-skipped; see Couple's Finale above). All 3 stages validate identically: client submits a `guess` array (length = that stage's phrase) in position order, server compares to that stage's phrase. Winning stage 1/2 returns `stageComplete`/`nextStage` and advances without unlocking video; winning stage 3 returns `finalStage` and sets `video_unlocked`. Wrong attempts return hints for the *next* attempt in the same stage |
 | `POST /api/couple/reveal` | couple-game.js | Flips `party_state` to `revealed`, which every guest's own poll picks up independently. Called automatically by `tv-mode.html`'s fixed timer with no body — gender defaults to the `PARTY_GENDER` secret unless `body.gender` is explicitly passed |
 | `GET /api/couple/video` | couple-game.js | Streams the reveal video from R2, gated on `video_unlocked`. 404s until a video file is actually uploaded |
 | `GET /api/poll/state` | poll-engine.js | Current Opinion Poll status/phase/question/timer/tally — guest phones and the TV host display both poll this. Lazily advances `poll_current_index` off elapsed time; no cron needed. Always includes `finaleLocked` (true when LOCKed and `'bigguess'` isn't in `finale_unlocked_groups`) |
@@ -575,9 +588,9 @@ the real party:
 □ Incognito attempt — fingerprint caught, no voucher
 □ Couple enters PIN — valid only in FINALE state
 □ Couple enters 7+ letters — Stage 1 (Word Scramble) unlocks
-□ Stage 1 attempt 3 — auto-completes, advances to Stage 2 (Memory Match)
-□ Stage 2 attempt 3 — auto-completes, advances to Stage 3 (Puzzle Assembly)
-□ Stage 3 attempt 3 — auto-completes, couple's device redirects to tv-mode.html
+□ Stage 1 attempt 3 — answer banner shown, tiles still must be placed manually, any submission (even wrong) advances to Stage 2 (Memory Match)
+□ Stage 2 attempt 3 — no pre-matched cards, any submission (even an incomplete one at timeout) advances to Stage 3 (Puzzle Assembly)
+□ Stage 3 attempt 3 — answer banner shown, tiles still must be placed manually, any submission (even wrong) redirects couple's device to tv-mode.html
 □ tv-mode.html — intro banner, 5→1 countdown, YouTube video autoplays (muted, unmute tap works)
 □ VIDEO_DURATION_SEC after video starts — gender auto-reveals with no manual tap, "Announced to all guests!" banner shows
 □ A second browser sitting on play.html/index.html auto-redirects to reveal.html within 10s, no manual action

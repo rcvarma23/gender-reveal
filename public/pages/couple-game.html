@@ -91,7 +91,7 @@
     }
 
     #stage1Section, #stage2Section, #stage3Section,
-    #autoCompleteSection, #transitionSection { display: none; }
+    #transitionSection { display: none; }
   </style>
 </head>
 <body>
@@ -103,6 +103,7 @@
     <div id="stage1Section">
       <div class="headline">🔤 Word Scramble</div>
       <div class="subline">Arrange the letters in the correct order</div>
+      <div class="question-banner" id="s1AnswerBanner" style="display:none"></div>
       <div class="attempt-label" id="s1AttemptLabel"></div>
       <div class="timer" id="s1TimerLabel"></div>
       <div class="slots-row" id="s1SlotsRow" style="margin-top:.5rem"></div>
@@ -125,6 +126,7 @@
     <div id="stage3Section">
       <div class="headline">🧩 Puzzle Assembly</div>
       <div class="subline">Piece the letters together in the correct order</div>
+      <div class="question-banner" id="s3AnswerBanner" style="display:none"></div>
       <div class="attempt-label" id="s3AttemptLabel"></div>
       <div class="timer" id="s3TimerLabel"></div>
       <div class="slots-row" id="s3SlotsRow" style="margin-top:.5rem"></div>
@@ -134,11 +136,6 @@
 
     <div id="transitionSection">
       <div class="headline" id="transitionHeadline"></div>
-    </div>
-
-    <div id="autoCompleteSection">
-      <div class="headline" id="autoHeadline">Final attempt — solving it for you! ✨</div>
-      <div class="slots-row" id="autoSlotsRow" style="margin-top:1rem"></div>
     </div>
 
   </main>
@@ -156,7 +153,6 @@
     const stage2Section       = document.getElementById('stage2Section');
     const stage3Section       = document.getElementById('stage3Section');
     const transitionSection   = document.getElementById('transitionSection');
-    const autoCompleteSection = document.getElementById('autoCompleteSection');
 
     const STAGE_NAMES = { 1: 'Word Scramble', 2: 'Memory Match', 3: 'Puzzle Assembly' };
 
@@ -168,7 +164,6 @@
       stage2Section.style.display       = name === 'stage2'     ? 'block' : 'none';
       stage3Section.style.display       = name === 'stage3'     ? 'block' : 'none';
       transitionSection.style.display   = name === 'transition' ? 'block' : 'none';
-      autoCompleteSection.style.display = name === 'auto'       ? 'block' : 'none';
       stageDots.style.display           = 'flex';
     };
 
@@ -207,8 +202,9 @@
 
     // ── Shared order-puzzle mechanic (Stage 1 scramble + Stage 3 assembly) ──
     const setupOrderPuzzle = (opts) => {
-      const { letters, hints, durationSec, attemptNumber, pieceStyle,
-              slotsRowId, trayRowId, attemptLabelId, timerLabelId, feedbackId, sectionName } = opts;
+      const { letters, hints, durationSec, attemptNumber, pieceStyle, answerWord,
+              slotsRowId, trayRowId, attemptLabelId, timerLabelId, feedbackId, sectionName,
+              answerBannerId } = opts;
       submitted = false;
       const pool = [...letters];
       let slots = letters.map(() => ({ letter: null, locked: false }));
@@ -261,6 +257,13 @@
 
       document.getElementById(attemptLabelId).textContent = `Attempt ${attemptNumber} of 3`;
       document.getElementById(feedbackId).textContent = '';
+      const banner = document.getElementById(answerBannerId);
+      if (answerWord) {
+        banner.textContent = answerWord.split('').join(' ');
+        banner.style.display = 'block';
+      } else {
+        banner.style.display = 'none';
+      }
       renderAll();
       startTimer(durationSec, document.getElementById(timerLabelId), doSubmit);
       showSection(sectionName);
@@ -405,34 +408,14 @@
 
       renderStageDots(status.stage);
 
-      if (status.attemptInProgress === 3) {
-        // Attempt 3 always auto-completes — no need to make them play it out.
-        // By attempt 3, hints cover the full code regardless of stage.
-        showSection('auto');
-        document.getElementById('autoHeadline').textContent =
-          `✨ Final attempt — solving ${STAGE_NAMES[status.stage]} for you!`;
-        const guess = Array(status.wordLength || 10).fill('');
-        (status.hints || []).forEach(h => { guess[h.position] = h.letter; });
-        const row = document.getElementById('autoSlotsRow');
-        row.innerHTML = guess.map(l => `<div class="slot filled">${l}</div>`).join('');
-        setTimeout(async () => {
-          const result = await API.couple.attempt({ guess }, token);
-          if (result.won) {
-            if (result.finalStage) goToVideo();
-            else showStageTransition(result.completedStage, result.nextStage);
-          }
-        }, 1800);
-        return;
-      }
-
       if (status.stage === 1) {
         setupOrderPuzzle({
           letters: status.puzzleLetters || [], hints: status.hints || [],
           durationSec: status.durationSec || 60, attemptNumber: status.attemptInProgress,
-          pieceStyle: false,
+          pieceStyle: false, answerWord: status.answerWord || null,
           slotsRowId: 's1SlotsRow', trayRowId: 's1TrayRow',
           attemptLabelId: 's1AttemptLabel', timerLabelId: 's1TimerLabel',
-          feedbackId: 's1Feedback', sectionName: 'stage1',
+          feedbackId: 's1Feedback', sectionName: 'stage1', answerBannerId: 's1AnswerBanner',
         });
       } else if (status.stage === 2) {
         document.getElementById('questionBanner').textContent = (status.bannerWord || '').split('').join(' ');
@@ -441,10 +424,10 @@
         setupOrderPuzzle({
           letters: status.assemblyLetters || [], hints: status.hints || [],
           durationSec: status.durationSec || 60, attemptNumber: status.attemptInProgress,
-          pieceStyle: true,
+          pieceStyle: true, answerWord: status.answerWord || null,
           slotsRowId: 's3SlotsRow', trayRowId: 's3TrayRow',
           attemptLabelId: 's3AttemptLabel', timerLabelId: 's3TimerLabel',
-          feedbackId: 's3Feedback', sectionName: 'stage3',
+          feedbackId: 's3Feedback', sectionName: 'stage3', answerBannerId: 's3AnswerBanner',
         });
       }
     };

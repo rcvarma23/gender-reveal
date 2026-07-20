@@ -58,7 +58,8 @@
     const continueBtn = document.getElementById('continueBtn');
 
     PartyState.startPolling((state) => {
-      if (state === 'waiting') window.location.href = 'index.html';
+      if (state === 'waiting')  window.location.href = 'index.html';
+      if (state === 'revealed') window.location.href = 'reveal.html';
     });
 
     const showError = (message) => {

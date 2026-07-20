@@ -49,21 +49,26 @@
 
 const STAGE_WORD_ENV = { 1: 'COUPLE_STAGE1_WORD', 2: 'COUPLE_STAGE2_WORD', 3: 'COUPLE_STAGE3_WORD' };
 
+// Attempt 3 is always winnable (autoComplete: true — the server accepts
+// whatever's submitted, correct or not, so the party never stalls) but is
+// still a real, manually-played round: no pre-locked tiles/cards, just the
+// full answer shown openly (revealAnswer) as a safety net while the couple
+// places the tiles / flips the cards themselves.
 const STAGE_CONFIG = {
   1: { name: 'scramble', attempts: {
-    1: { durationSec: 60,  hintsFraction: 0 },
-    2: { durationSec: 75,  hintsFraction: 0.25 },
-    3: { durationSec: 999, hintsFraction: 1, autoComplete: true },
+    1: { durationSec: 60, hintsFraction: 0 },
+    2: { durationSec: 75, hintsFraction: 0.25 },
+    3: { durationSec: 45, hintsFraction: 0, autoComplete: true, revealAnswer: true },
   } },
   2: { name: 'memory', attempts: {
-    1: { durationSec: 90,  hintsFraction: 0 },
+    1: { durationSec: 90, hintsFraction: 0 },
     2: { durationSec: 100, hintsFraction: 0.3 },
-    3: { durationSec: 999, hintsFraction: 1, autoComplete: true },
+    3: { durationSec: 75, hintsFraction: 0, autoComplete: true },
   } },
   3: { name: 'assembly', attempts: {
-    1: { durationSec: 60,  hintsFraction: 0 },
-    2: { durationSec: 75,  hintsFraction: 0.25 },
-    3: { durationSec: 999, hintsFraction: 1, autoComplete: true },
+    1: { durationSec: 60, hintsFraction: 0 },
+    2: { durationSec: 75, hintsFraction: 0.25 },
+    3: { durationSec: 45, hintsFraction: 0, autoComplete: true, revealAnswer: true },
   } },
 };
 
@@ -206,6 +211,7 @@ export default {
       const active = confirmed === 'true' && videoUnlocked !== 'true';
       const word = stageWord(stage);
       const hints = active ? computeHints(attemptInProgress, word, stageAttempts) : [];
+      const currentAttemptConfig = stageAttempts[attemptInProgress];
 
       const stageData = {};
       if (active) {
@@ -245,8 +251,9 @@ export default {
         wordLength:       word.length,
         attempts,
         attemptInProgress,
-        durationSec:      stageAttempts[attemptInProgress]?.durationSec ?? null,
+        durationSec:      currentAttemptConfig?.durationSec ?? null,
         hints,
+        answerWord:       active && currentAttemptConfig?.revealAnswer ? word.join('') : null,
         videoUnlocked:    videoUnlocked === 'true',
         ...stageData,
       });
