@@ -240,8 +240,8 @@ const SessionManager = (() => {
   // authoritative — this copy is only for the pre-flight UI check before
   // hitting the server) and cooldownMs in public/config/game-config.js.
   const COOLDOWNS = {
-    adult:   60 * 1000,
-    teen:    60 * 1000,
+    adult:   15 * 1000,
+    teen:    15 * 1000,
     kid:     0,
     toddler: 0,
   };

@@ -10,7 +10,7 @@
  * Anti-cheat layers enforced:
  *   Layer 1 — Session lock (completed = blocked)
  *   Layer 2 — Speed validation (too fast = disqualified)
- *   Layer 3 — Device cooldown (3 min between adult sessions)
+ *   Layer 3 — Device cooldown (15s between adult/teen sessions)
  *   Layer 5 — Fingerprint matching (incognito detection)
  *
  * (Removed) Layer 7 — kid-played-first gate for adult voucher eligibility.
@@ -22,8 +22,8 @@
 // Must match COOLDOWNS in public/js/core/session.js and cooldownMs in
 // public/config/game-config.js — this copy is the enforced source of truth.
 const COOLDOWNS = {
-  adult:   60 * 1000,
-  teen:    60 * 1000,
+  adult:   15 * 1000,
+  teen:    15 * 1000,
   kid:     0,
   toddler: 0,
 };
@@ -112,7 +112,7 @@ export default {
             success:   false,
             reason:    'cooldown',
             remaining: Math.ceil(remaining / 1000),
-            message:   `Please wait ${Math.ceil(remaining / 60000)} more minute(s)`,
+            message:   `Please wait ${Math.ceil(remaining / 1000)} more second(s)`,
           });
         }
       }

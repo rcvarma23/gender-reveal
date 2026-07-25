@@ -29,8 +29,8 @@ const PARTY_CONFIG = {
 
   // ─── TIMING RULES ───────────────────────────────────────────
   cooldowns: {
-    adult:    60 * 1000,       // 60s between adult sessions
-    teen:     60 * 1000,       // 60s between teen sessions
+    adult:    15 * 1000,       // 15s between adult sessions
+    teen:     15 * 1000,       // 15s between teen sessions
     kid:      0,               // no cooldown for kids
     toddler:  0,
   },

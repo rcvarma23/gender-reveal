@@ -89,7 +89,7 @@ const GAME_CONFIG = {
     showTimer:       true,
     minCompleteSecs: 30,
     tapTargetPx:     48,
-    cooldownMs:      60 * 1000,
+    cooldownMs:      15 * 1000,
 
     'baby-trivia': {
       questionCount:   10,
@@ -138,7 +138,7 @@ const GAME_CONFIG = {
     showTimer:       true,
     minCompleteSecs: 45,
     tapTargetPx:     52,
-    cooldownMs:      60 * 1000,
+    cooldownMs:      15 * 1000,
     // requiresKidFirst removed — any adult who plays is voucher-eligible
     // regardless of whether a kid played on the same device first
 
